@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>便利商店個人化餐食推薦 — Group 13</title>
+<link rel="stylesheet" href="/static/style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<header>
+  <h1>🍱 便利商店個人化餐食推薦</h1>
+  <p class="sub">NTU 114-2 OR Final Project | Group 13 | MILP + GRASP-LS optimization</p>
+</header>
+
+<main>
+  <section class="card form-card">
+    <h2>① 輸入你的條件</h2>
+    <form id="profile-form">
+      <div class="grid">
+        <label>性別
+          <select name="sex">
+            <option value="M">男</option><option value="F">女</option>
+          </select>
+        </label>
+        <label>年齡 <input type="number" name="age" value="22" min="15" max="80" required></label>
+        <label>身高 (cm) <input type="number" step="0.1" name="height" value="170" required></label>
+        <label>體重 (kg) <input type="number" step="0.1" name="weight" value="65" required></label>
+        <label>活動量
+          <select name="activity">
+            <option value="low">低（少坐少動）</option>
+            <option value="mid" selected>中（每週運動 1-3 次）</option>
+            <option value="high">高（每天運動）</option>
+          </select>
+        </label>
+        <label>健康目標
+          <select name="goal">
+            <option value="maintain" selected>維持現狀</option>
+            <option value="cut">減脂</option>
+            <option value="bulk">增肌</option>
+          </select>
+        </label>
+        <label>情境模式
+          <select name="scenario">
+            <option value="light">輕食</option>
+            <option value="regular" selected>正餐</option>
+            <option value="latenight">宵夜型</option>
+          </select>
+        </label>
+        <label>預算上限 (NT$) <input type="number" name="budget" value="120" min="40" required></label>
+      </div>
+
+      <details>
+        <summary>進階：模型權重設定</summary>
+        <div class="grid">
+          <label>成本權重 α
+            <input type="range" name="alpha" min="0" max="3" step="0.1" value="1" oninput="this.nextElementSibling.textContent=this.value">
+            <span>1</span></label>
+          <label>蛋白質權重 β
+            <input type="range" name="beta" min="0" max="4" step="0.1" value="0.5" oninput="this.nextElementSibling.textContent=this.value">
+            <span>0.5</span></label>
+          <label>多樣性權重 γ
+            <input type="range" name="gamma" min="0" max="10" step="0.5" value="2" oninput="this.nextElementSibling.textContent=this.value">
+            <span>2</span></label>
+          <label>求解器
+            <select name="solver">
+              <option value="milp" selected>MILP (Gurobi 精確最佳)</option>
+              <option value="grasp">GRASP-LS (本研究啟發式)</option>
+            </select>
+          </label>
+        </div>
+      </details>
+      <div class="btns">
+        <button type="submit" class="primary">🎯 推薦這一餐</button>
+        <button type="button" id="reset-history" class="secondary">🔄 清空近期紀錄</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card" id="result-card" style="display:none">
+    <h2>② 推薦結果</h2>
+    <div id="meal-summary"></div>
+    <h3>推薦清單</h3>
+    <div id="item-list"></div>
+    <h3>單餐限制達成度</h3>
+    <div id="targets"></div>
+    <details>
+      <summary>近期歷史（影響下一次多樣性懲罰）</summary>
+      <div id="history"></div>
+    </details>
+    <div class="meta" id="meta"></div>
+  </section>
+
+  <section class="card explain-card">
+    <h2>💡 模型背後在做什麼？</h2>
+    <p>1. <strong>Mifflin–St Jeor</strong>：把性別、年齡、身高、體重、活動量轉換成你的每日熱量需求 (TDEE)，再依減脂 −500、增肌 +300 調整。</p>
+    <p>2. <strong>情境縮放</strong>：依輕食 / 正餐 / 宵夜型，將每日需求分配為單餐區間（如正餐 30%~45% 熱量）。</p>
+    <p>3. <strong>MILP 最佳化</strong>：在 75+ 真實全家商品 + 優惠組合中，求解
+        <em>min α · 總成本 − β · 蛋白質 + γ · 歷史懲罰 + Σλ · 鬆弛</em>，
+        並同時滿足熱量區間、蛋白質下限、糖／鈉上限與商品數量等多重限制。</p>
+    <p>4. <strong>多樣性</strong>：你近期吃過的商品在下一次推薦時會受到歷史懲罰，避免反覆推薦同樣的東西。</p>
+  </section>
+</main>
+
+<footer>
+  <small>資料來源：全家便利商店食在購安心 API
+    (<code>foodsafety.family.com.tw</code>) · 價格依類別均價估計 · 模型細節見 final report</small>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
