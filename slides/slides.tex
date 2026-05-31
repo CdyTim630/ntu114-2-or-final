@@ -9,7 +9,7 @@
 \setbeamertemplate{frametitle}[default][shadow=false]
 \addtobeamertemplate{frametitle}{\vspace{2pt}}{\vspace{2pt}}
 \usepackage{xeCJK}
-\setCJKmainfont[BoldFont={Source Han Serif TW Bold}]{Source Han Serif TW}
+\setCJKmainfont{Noto Serif TC}
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
 \usepackage{graphicx}
@@ -106,9 +106,9 @@ x_i = a_i + \sum_{k:\,i\in S_k} y_k \quad (\le 1)
 \textbf{鬆弛變數：} $s_P, s^{\pm}_{F}, s^{\pm}_{C}, s_{\text{Sug}}, s_{\text{Sod}} \ge 0$
 \bigskip\pause
 
-\textbf{歷史多樣性：} 取近 $L$ 次推薦紀錄。若 $i$ 出現於第 $r$ 近的紀錄，貢獻權重 $w_r = L-r+1$；
-$h_i = \sum_r w_r \cdot \mathbf{1}(i \in \text{record}_r)$。\\
-$\Rightarrow$ 越近期重複的商品，$h_i$ 越大，目標函數懲罰越重。
+\textbf{分層記憶（MLFQ）：} 近期推薦去重後依「新近排名」$r$ 分層，懲罰權重 $\boldsymbol\omega=(5,2.5,1,0.3)$ 隨層遞減（邊界 $r\le 3,8,16,30$）；越久遠逐層淡出，\textbf{再次被推則跳回最上層}。
+\[ h_i = \sum_r \omega_{t(r)}\,\mathbf{1}(i \in \text{rec}_r),\qquad g_i = \sum_r \omega_{t(r)}\,\mathbf{1}(\mathrm{role}(\text{rec}_r)=\mathrm{role}(i)) \]
+$\Rightarrow$ $h_i$ 罰「同品項」、$g_i$ 罰「同類別」（如所有豆漿），避免只換同類變體。
 \end{frame}
 
 \begin{frame}{MILP — Objective \& Constraints}
@@ -116,15 +116,14 @@ $\Rightarrow$ 越近期重複的商品，$h_i$ 越大，目標函數懲罰越重
 \[
 \alpha \underbrace{\left(\sum c_i a_i + \sum c_k^{\text{promo}} y_k\right)}_{\text{總成本}}
 - \beta \sum pro_i x_i
-+ \gamma \sum h_i x_i
++ \gamma \sum h_i x_i + \gamma_{\text{cat}} \sum g_i x_i
 + \sum_{*} \lambda_* s_*
 \]
 \textbf{Hard constraints:}
 \begin{itemize}
-  \item 互斥：$a_i + \sum_{k:i\in S_k} y_k \le 1$
-  \item 預算：$\sum c_i a_i + \sum c_k^{\text{promo}} y_k \le B$
-  \item 熱量區間（硬）：$\text{Cal}^{\min}_m \le \sum cal_i x_i \le \text{Cal}^{\max}_m$
-  \item 數量上限：$\sum x_i \le N^{\max}_m$；正餐模式至少 1 主食 + 1 蛋白質來源
+  \item 互斥 $a_i + \sum_{k:i\in S_k} y_k \le 1$；預算 $\le B$；熱量區間 $\text{Cal}^{\min}_m \le \sum cal_i x_i \le \text{Cal}^{\max}_m$
+  \item 餐型結構：每餐 $\le 1$ 飲料、$\le 1$ 甜點；正餐恰 1 主餐 $+ \ge 1$ 蛋白來源
+  \item 鈉硬上限 $\sum sod_i x_i \le 1.5\,\text{Sodium}^{\max}_m$；數量 $\le N^{\max}_m$
 \end{itemize}
 \textbf{Soft constraints（加鬆弛變數）:}
 蛋白質下限、脂肪／碳水區間、糖／鈉上限。
@@ -144,11 +143,13 @@ $\Rightarrow$ 越近期重複的商品，$h_i$ 越大，目標函數懲罰越重
 \textbf{三階段架構}：
 \begin{enumerate}
   \item \textbf{Greedy Randomized Construction (GRC)}
-        基於綜合分數 $\sigma$ 構建 RCL，隨機抽取以平衡探索/利用
+        基於綜合分數 $\sigma$ 構建 RCL，隨機抽取；結構感知：先放 1 主餐並遵守飲料/甜點上限
   \item \textbf{Local Search (LS)}
         1-1 swap、1-0 drop、0-1 add、combo-swap，首改善策略
-  \item \textbf{Multi-start}：$K_{\text{restart}}=25$ 個隨機種子，回傳最佳
+  \item \textbf{Multi-start}：$K_{\text{restart}}=25$ 個隨機種子，蒐集解池
 \end{enumerate}
+\vspace{4pt}
+\textbf{多樣化部署：} 自 $\epsilon$-最佳解集 $\{s:z(s)\le z^*+\epsilon\}$ 隨機取樣（$\epsilon=8$）；緊預算下 GRASP 無解時退回 MILP 後備。
 \end{frame}
 
 \begin{frame}{綜合分數 $\sigma(p)$ — 啟發式的「眼力」}
@@ -159,14 +160,14 @@ $\Rightarrow$ 越近期重複的商品，$h_i$ 越大，目標函數懲罰越重
 \;-\;\lambda_{\text{Sug}}\tfrac{sug_p}{\text{Sugar}^{\max}_m}
 + B_{\text{cat}}(p)
 \]
-其中 $B_{\text{cat}}(p) = 1.2 \cdot \mathbf{1}(p\in I^S) + 1.5\cdot \mathbf{1}(p\in I^P)$。
+其中 $B_{\text{cat}}(p) = 1.2 \cdot \mathbf{1}(p\in I^{\mathrm{main}}) + 1.5\cdot \mathbf{1}(p\in I^P)$，且 $h_p$ 已折入「同品項 + 同類別」之分層懲罰。
 \bigskip
 
 \textbf{設計考量：}
 \begin{itemize}
   \item 蛋白質、優惠：正向加權
-  \item 價格、熱量過載、鈉糖過載、歷史重複：負向懲罰
-  \item 主食與蛋白質類別給予額外獎勵，符合正餐結構需求
+  \item 價格、熱量過載、鈉糖過載、歷史/同類別重複：負向懲罰
+  \item 主餐與蛋白質給予額外獎勵，符合正餐結構需求
 \end{itemize}
 \textbf{組合也被視作「super-item」} 在 GRC 第一步以正比於折扣的機率嘗試納入。
 \end{frame}
@@ -178,15 +179,11 @@ $\Rightarrow$ 越近期重複的商品，$h_i$ 越大，目標函數懲罰越重
 \column{0.5\textwidth}
 \textbf{Real-world data (即時爬取)}
 \begin{itemize}
-  \item 自行撰寫 scraper × 3 個官方資料源：
-    \begin{itemize}
-      \item 食在購安心 API（營養標示）
-      \item 鮮食促銷頁（價格 tier）
-      \item 行動購 GraphQL（電商價）
-    \end{itemize}
-  \item \alert{\textbf{581 項真實商品，66\% 含官方零售價}}
-  \item 55 組合成優惠組合
-  \item 6 個典型 user × 3 個情境 = \textbf{18 個 real-world 例題}
+  \item scraper × 官方資料源：食在購安心 API（營養）、鮮食促銷頁（分級價）
+  \item 581 項 $\to$ 過濾家庭份($\ge3$份)後 \alert{\textbf{488 項}}
+  \item 價格：124 項鮮食\textbf{真實分級價} + 457 項\textbf{市售校正價}（電商為整箱價，不適用單餐）
+  \item 角色標記：依分類重定 主餐/飲料/甜點/配菜
+  \item 6 typical user × 3 情境 = \textbf{18 個 real-world 例題}
 \end{itemize}
 \column{0.5\textwidth}
 \textbf{Random instances}
@@ -205,8 +202,8 @@ $\Rightarrow$ 越近期重複的商品，$h_i$ 越大，目標函數懲罰越重
 \centering
 \includegraphics[width=0.95\textwidth]{../results/figs/fig_real_breakdown.png}\\
 \small
-U1 男·減脂·正餐：MILP / GRASP 取「\textbf{魚板+大容量無糖豆漿}」NT\$55，851 kcal、62.9g蛋白；\\
-Greedy 取多件高蛋白單品，鈉量爆表 $\Rightarrow$ \alert{hard-infeasible}。
+U1 男·減脂·正餐：MILP/GRASP 取\textbf{結構完整的一餐}（主餐+配菜+飲料+甜點，NT\$110，全達標）；\\
+Greedy 缺主餐、鈉破 $1.5\times$ 硬上限 $\Rightarrow$ \alert{hard-infeasible}。
 \end{frame}
 
 \begin{frame}{18 個真實例題 — 可行性與最佳化差距}
@@ -216,10 +213,10 @@ Greedy 取多件高蛋白單品，鈉量爆表 $\Rightarrow$ \alert{hard-infeasi
 \column{0.5\textwidth}
 \textbf{結果摘要}
 \begin{itemize}
-  \item MILP：100\% 找到全域最佳解
-  \item \alert{GRASP-LS：100\% hard-feasible，平均 gap 3.5\%}
-  \item Greedy：67\% feasible，33\% 因鈉/熱量爆表被拒
-  \item GRASP-LS 在 17/18 例題達到 0\% gap，最差 61\%（U1 宵夜型，可行空間極小）
+  \item MILP：100\% 全域最佳解
+  \item \alert{GRASP-LS：100\% hard-feasible，平均 gap 7.1\%}（12/18 為 0\%）
+  \item \alert{Greedy：0\% feasible}（結構 + 鈉硬上限下全面失效）
+  \item 非零 gap 全出現於正餐情境（結構限制使可行組合變窄）
 \end{itemize}
 \end{columns}
 \end{frame}
@@ -227,8 +224,8 @@ Greedy 取多件高蛋白單品，鈉量爆表 $\Rightarrow$ \alert{hard-infeasi
 \begin{frame}{互動式網頁應用（Flask）}
 \centering
 \includegraphics[width=0.88\textwidth]{../results/figs/webapp_result.png}\\
-\small 使用者輸入 → Mifflin-St Jeor 換算 → MILP/GRASP 求解 → 即時推薦清單。\\
-Cookie 維持近期歷史佇列 · slider 調整 $\alpha, \beta, \gamma$ · 跑在 581 項真實商品上。
+\small 使用者輸入 → Mifflin-St Jeor 換算 → GRASP/MILP 求解 → 即時推薦清單。\\
+分層「口味記憶」(剛吃過/前幾餐/久未推) · slider 調整 $\alpha,\beta,\gamma$ · 跑在 488 項真實商品上。
 \end{frame}
 
 \begin{frame}{隨機例題：scalability 與 gap}
@@ -240,9 +237,9 @@ Cookie 維持近期歷史佇列 · slider 調整 $\alpha, \beta, \gamma$ · 跑�
 \end{columns}
 \medskip\small
 \begin{itemize}
-  \item \textbf{Greedy gap} 隨規模快速惡化：63\% → 399\%
-  \item \textbf{GRASP-LS gap} 多數 0--10\%，最大規模 $|I|=300$ 仍維持 1.8\%
-  \item MILP 60ms / GRASP 2.7s / Greedy <5ms @ $|I|=300$
+  \item \alert{Greedy 多數規模 0\% 可行}（結構 + 鈉硬上限）
+  \item \textbf{GRASP-LS} 平均 gap 4.9\%、feasible 93\%（28/30）
+  \item MILP 227ms / GRASP 4.2s / Greedy <7ms @ $|I|=300$
 \end{itemize}
 \end{frame}
 
@@ -251,11 +248,27 @@ Cookie 維持近期歷史佇列 · slider 調整 $\alpha, \beta, \gamma$ · 跑�
 \column{0.5\textwidth}
 \textbf{$\beta$：成本-蛋白質權衡}\\
 \includegraphics[width=\textwidth]{../results/figs/fig_beta_tradeoff.png}\\
-\small{$\beta=0$：壓低成本（45g 蛋白質）；$\beta=8$：花 NT\$77 多買 37g 蛋白質}
+\small{$\beta\le1$：NT\$109／45.6g；$\beta\ge2$ 階梯跳到 92.8g；$\beta=8$：119.5g／NT\$201}
 \column{0.5\textwidth}
-\textbf{$\gamma$：歷史懲罰／多樣性}\\
+\textbf{$\gamma$：分層記憶／多樣性}\\
 \includegraphics[width=\textwidth]{../results/figs/fig_gamma_diversity.png}\\
-\small{注入歷史 $\{22,42,50\}$ 後，$\gamma\ge 1$ 即可完全避免重複，僅多 NT\$3}
+\small{注入 $\gamma=0$ 最優解為歷史，$\gamma\ge1$ 重複歸零，花費反降 NT\$109.5$\to$103}
+\end{columns}
+\end{frame}
+
+\begin{frame}{多樣性的代價}
+\begin{columns}[c]
+\column{0.52\textwidth}
+\includegraphics[width=\textwidth]{../results/figs/fig_price_of_diversity.png}
+\column{0.48\textwidth}
+\textbf{以 Gurobi 解池窮舉 $\epsilon$-最佳解集合}
+\[ \mathcal{S}_\epsilon=\{s: z(s)\le z^*+\epsilon\} \]
+\begin{itemize}
+  \item $\epsilon=0$：僅 \textbf{1} 種最佳餐
+  \item $\epsilon=8$：\textbf{12} 種達標餐，平均僅多 NT\$6.7
+  \item $\epsilon=16$：48 種；$\epsilon=32$：\textbf{641} 種
+\end{itemize}
+\alert{在最佳解附近，多樣性極為廉價}——部署即以 $\epsilon=8$ 取樣 + 分層記憶長期去重。
 \end{columns}
 \end{frame}
 
@@ -264,16 +277,16 @@ Cookie 維持近期歷史佇列 · slider 調整 $\alpha, \beta, \gamma$ · 跑�
 \begin{frame}{結論與洞察}
 \textbf{學術貢獻}
 \begin{itemize}
-  \item 把便利商店餐食推薦形式化為一含優惠組合、含個人化營養限制與多樣性懲罰的 MILP
-  \item 提出 GRASP-LS 啟發式：100\% feasible、平均 \textbf{3.5\%} gap、anytime 性質
-  \item 即時爬取 581 項全家真實商品，並實作 Flask 互動式 web 應用
+  \item 形式化為一含優惠組合、個人化營養、\textbf{餐型結構}與\textbf{分層多樣性懲罰}的 MILP
+  \item GRASP-LS 啟發式：100\% feasible、平均 gap \textbf{7.1\%}／\textbf{4.9\%}、anytime
+  \item 以 Gurobi 解池量化「\textbf{多樣性的代價}」；488 項真實商品 + Flask web app
 \end{itemize}
 \bigskip
 \textbf{實務洞察}
 \begin{itemize}
-  \item \textbf{單一指標排序不能取代多限制最佳化}：Greedy 在 44\% 真實情境下不可行
-  \item \textbf{Soft constraint 是關鍵}：硬式禁止會丟失大量可行解，鬆弛能換取連續性
-  \item \textbf{歷史懲罰幾乎不漲價}：$\gamma\ge 1$ 時 NT\$ 變動 < 2.5\%
+  \item \textbf{單一指標排序不能取代多限制最佳化}：Greedy 在新結構下 \alert{0\% 可行}
+  \item \textbf{餐型結構 + 角色標記}讓推薦從「湊營養」變成「像一餐」
+  \item \textbf{多樣性極廉}：容忍 NT\$8 即有 12 種達標餐；分層歷史懲罰甚至不漲價
   \item \textbf{$\beta$ 是個人化抓手}：使用者可以 slider 調節成本／蛋白質偏好
 \end{itemize}
 \end{frame}

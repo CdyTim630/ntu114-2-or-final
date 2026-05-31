@@ -4,6 +4,45 @@ from pathlib import Path
 from typing import List
 import csv
 import random
+import re
+
+# Family-size packs (>= this many servings) are NOT a realistic single-meal
+# purchase — you cannot buy 1/4 of a 1857 ml soy-milk bottle or 1/3 of a 936 ml
+# milk carton for one meal. Such SKUs are dropped from the optimiser entirely.
+# Single packs and small 2-packs (2-入 onigiri, a 2-pack snack) are kept.
+FAMILY_PACK_MIN_SERVINGS = 3
+
+# A single convenience-store portion never realistically costs less than this.
+# Small multipacks that survive the filter still have their price divided by
+# `n_servings`; flooring stops an imputed pack price from turning into an
+# unrealistic per-serving price that dominates the cost-minimising objective.
+# Single-serving items (n_servings == 1) keep their real price.
+MIN_SERVING_PRICE = 18.0
+
+# total beverage volume embedded in a product name, e.g. "...1857ml", "...2L"
+_VOL_ML_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:毫升|ml|cc)", re.IGNORECASE)
+_VOL_L_RE  = re.compile(r"(\d+(?:\.\d+)?)\s*(?:公升|l)(?![a-z])", re.IGNORECASE)
+
+
+def _portion_name(name: str, servings: float) -> str:
+    """Turn a multipack name into a per-serving name.
+
+    Drops the misleading whole-pack volume (e.g. "1857ml") and, when a volume is
+    present, annotates the realistic per-serving volume instead.
+    """
+    if servings <= 1:
+        return name
+    n = int(servings) if servings == int(servings) else round(servings, 1)
+    m = _VOL_ML_RE.search(name)
+    total_ml = float(m.group(1)) if m else None
+    if total_ml is None:
+        m = _VOL_L_RE.search(name)
+        total_ml = float(m.group(1)) * 1000 if m else None
+    if m is not None:
+        base = (name[:m.start()] + name[m.end():]).strip()
+        per = int(round(total_ml / servings / 5.0) * 5)  # nearest 5 ml
+        return f"{base}（約 {per}ml／份，整包{n}份）"
+    return f"{name}（單份，整包{n}份）"
 
 
 @dataclass
@@ -20,6 +59,42 @@ class Product:
     carb: float
     sug: float
     sod: float
+    role: str = "side"   # main / drink / dessert / side (meal-structure role)
+
+
+# Meal-structure role of each product, derived from its FamilyMart category (the
+# CSV's keyword-based is_main / is_protein flags are noisy — e.g. cakes and
+# cookies were flagged as protein sources). One of: main / drink / dessert / side.
+ROLE_BY_CATEGORY = {
+    "主餐麵食": "main", "壽司手卷飯糰": "main", "三明治漢堡": "main",
+    "冷凍食品": "main", "麵包": "main", "蒸箱食品": "main",
+    "一般飲料": "drink", "現做飲料": "drink", "乳製品": "drink",
+    "點心零食": "dessert", "蛋糕甜品": "dessert", "冰品": "dessert",
+    "加工食品": "side", "燒烤食品": "side", "小菜、滷味、湯品": "side",
+    "現煮鍋物": "side", "生鮮蔬果沙拉": "side", "營養食品": "side",
+}
+# An item counts as a real protein source only if it clears this per-serving
+# protein bar AND is not a dessert/sweet (so a 6 g-protein cake never qualifies).
+PROTEIN_MIN_G = 7.0
+
+# A "麵包" with at least this much sugar is a sweet bread (菠蘿/拔絲/可可可頌) —
+# really a snack, not a meal's staple main. Reclassified as dessert so it can't
+# be a regular meal's main and is limited to one per meal.
+SWEET_BREAD_SUGAR_G = 10.0
+
+
+def _derive_role(category: str, name: str) -> str:
+    role = ROLE_BY_CATEGORY.get(category, "side")
+    # keyword overrides for items mis-placed by their category. Use multi-char
+    # keywords only — a bare "蛋" would wrongly match "蛋糕" (cake).
+    if any(k in name for k in ("便當", "炒飯", "丼", "飯糰", "壽司", "三明治",
+                               "漢堡", "義大利麵", "炒麵", "烏龍麵", "拉麵", "水餃")):
+        role = "main"
+    elif role == "dessert" and any(k in name for k in (
+            "雞胸", "雞腿", "雞肉", "豬肉", "牛肉", "鮭魚", "鯖魚", "茶葉蛋",
+            "滷蛋", "豆腐", "毛豆", "沙拉")):
+        role = "side"
+    return role
 
 
 @dataclass
@@ -58,19 +133,56 @@ def load_real_instance(data_dir: str = "data", use_scraped: bool = True) -> Inst
     with open(fname, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            # Many FamilyMart SKUs are multi-serving packs (e.g. a 1857 ml soy
+            # milk = 4 servings, a snack box = 24). The raw nutrition/price are
+            # for the WHOLE pack, which is not what a single meal contains.
+            # Normalise everything to ONE serving so the optimiser reasons about
+            # a realistic per-meal portion (and price-per-serving is comparable).
+            try:
+                servings = float(row.get("n_servings", "1") or "1")
+            except ValueError:
+                servings = 1.0
+            if servings < 1.0:
+                servings = 1.0
+            # Drop family-size packs (large bottles / bulk boxes) — they are not
+            # a sensible single-meal item, and their imputed per-serving price
+            # otherwise lets them dominate the recommendation every time.
+            if servings >= FAMILY_PACK_MIN_SERVINGS:
+                continue
+            # When a pack is multi-serving, the values shown are per single
+            # serving — annotate the name (and drop the misleading whole-pack
+            # volume) so the user knows it's a portion, not the whole pack.
+            name = _portion_name(row["name"], servings)
+            # Per-serving price, floored so imputed multipack prices can't turn
+            # into an unrealistic ~1 NTD "serving" that dominates the objective.
+            per_serving_price = float(row["price"]) / servings
+            if servings > 1:
+                per_serving_price = max(per_serving_price, MIN_SERVING_PRICE)
+            category = row.get("category", "")
+            pro_g = round(float(row["protein"]) / servings, 1)
+            sug_g = round(float(row["sugar"]) / servings, 1)
+            role = _derive_role(category, name)
+            # a sugar-heavy bread is a snack, not a staple main
+            if role == "main" and category == "麵包" and sug_g >= SWEET_BREAD_SUGAR_G:
+                role = "dessert"
+            # Re-derive structure flags from category/role + protein content
+            # rather than trusting the noisy keyword-based CSV flags.
+            is_main = role == "main"
+            is_protein = pro_g >= PROTEIN_MIN_G and role != "dessert"
             products.append(Product(
                 pid=int(row["product_id"]),
-                name=row["name"],
-                category=row.get("category", ""),
-                is_main=row["is_main"] == "1",
-                is_protein=row["is_protein"] == "1",
-                price=float(row["price"]),
-                cal=float(row["calories"]),
-                pro=float(row["protein"]),
-                fat=float(row["fat"]),
-                carb=float(row["carb"]),
-                sug=float(row["sugar"]),
-                sod=float(row["sodium"]),
+                name=name,
+                category=category,
+                is_main=is_main,
+                is_protein=is_protein,
+                price=round(per_serving_price, 1),
+                cal=round(float(row["calories"]) / servings, 1),
+                pro=pro_g,
+                fat=round(float(row["fat"]) / servings, 1),
+                carb=round(float(row["carb"]) / servings, 1),
+                sug=sug_g,
+                sod=round(float(row["sodium"]) / servings, 1),
+                role=role,
             ))
 
     combos: List[Combo] = (_build_combos(products)
@@ -174,6 +286,7 @@ def generate_random_instance(n_products: int, n_combos: int, seed: int = 0,
             price=round(price, 1), cal=round(cal, 1),
             pro=round(pro, 1), fat=round(fat, 1), carb=round(carb, 1),
             sug=round(sug, 1), sod=round(sod, 1),
+            role="main" if is_main else "side",
         ))
 
     combos: List[Combo] = []

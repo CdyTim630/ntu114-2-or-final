@@ -3,18 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <title>便利商店個人化餐食推薦 — Group 13</title>
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v=7">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
 <header>
-  <h1>🍱 便利商店個人化餐食推薦</h1>
-  <p class="sub">NTU 114-2 OR Final Project | Group 13 | MILP + GRASP-LS optimization</p>
+  <div class="header-inner">
+    <div>
+      <h1>便利商店個人化餐食推薦</h1>
+      <p class="sub">NTU 114-2 OR Final Project · Group 13 · MILP + GRASP-LS</p>
+    </div>
+  </div>
 </header>
 
 <main>
-  <section class="card form-card">
-    <h2>① 輸入你的條件</h2>
+  <section class="card">
+    <h2 class="card-title"><span class="step">1</span>輸入你的條件</h2>
     <form id="profile-form">
       <div class="grid">
         <label>性別
@@ -59,53 +63,77 @@
             <input type="range" name="beta" min="0" max="4" step="0.1" value="0.5" oninput="this.nextElementSibling.textContent=this.value">
             <span>0.5</span></label>
           <label>多樣性權重 γ
-            <input type="range" name="gamma" min="0" max="10" step="0.5" value="2" oninput="this.nextElementSibling.textContent=this.value">
-            <span>2</span></label>
+            <input type="range" name="gamma" min="0" max="10" step="0.5" value="6" oninput="this.nextElementSibling.textContent=this.value">
+            <span>6</span></label>
           <label>求解器
             <select name="solver">
-              <option value="milp" selected>MILP (Gurobi 精確最佳)</option>
-              <option value="grasp">GRASP-LS (本研究啟發式)</option>
+              <option value="grasp" selected>GRASP-LS (本研究啟發式，多樣化推薦)</option>
+              <option value="milp">MILP (Gurobi 精確最佳，固定結果)</option>
             </select>
           </label>
         </div>
       </details>
       <div class="btns">
-        <button type="submit" class="primary">🎯 推薦這一餐</button>
-        <button type="button" id="reset-history" class="secondary">🔄 清空近期紀錄</button>
+        <button type="submit" class="primary">推薦這一餐</button>
+        <button type="button" id="reset-history" class="secondary">清空近期紀錄</button>
       </div>
     </form>
   </section>
 
-  <section class="card" id="result-card" style="display:none">
-    <h2>② 推薦結果</h2>
-    <div id="meal-summary"></div>
-    <h3>推薦清單</h3>
-    <div id="item-list"></div>
-    <h3>單餐限制達成度</h3>
-    <div id="targets"></div>
-    <details>
-      <summary>近期歷史（影響下一次多樣性懲罰）</summary>
-      <div id="history"></div>
-    </details>
-    <div class="meta" id="meta"></div>
+  <section class="card" id="result-card">
+    <h2 class="card-title"><span class="step">2</span>推薦結果</h2>
+
+    <div id="result-placeholder" class="placeholder">
+      <p>填好左側條件後，點擊「推薦這一餐」</p>
+      <p class="sub">推薦的商品清單、營養分析與單餐限制達成度將顯示在這裡。</p>
+    </div>
+
+    <div id="result-body" style="display:none">
+      <div id="meal-summary"></div>
+      <div class="section-label">推薦清單</div>
+      <div id="item-list"></div>
+      <div class="section-label">單餐限制達成度</div>
+      <div id="targets"></div>
+      <details open>
+        <summary>口味記憶（越近期吃過的，越不會再被推薦；久未出現會慢慢淡出）</summary>
+        <div id="history"></div>
+      </details>
+      <div class="meta" id="meta"></div>
+    </div>
   </section>
 
   <section class="card explain-card">
-    <h2>💡 模型背後在做什麼？</h2>
-    <p>1. <strong>Mifflin–St Jeor</strong>：把性別、年齡、身高、體重、活動量轉換成你的每日熱量需求 (TDEE)，再依減脂 −500、增肌 +300 調整。</p>
-    <p>2. <strong>情境縮放</strong>：依輕食 / 正餐 / 宵夜型，將每日需求分配為單餐區間（如正餐 30%~45% 熱量）。</p>
-    <p>3. <strong>MILP 最佳化</strong>：在 75+ 真實全家商品 + 優惠組合中，求解
-        <em>min α · 總成本 − β · 蛋白質 + γ · 歷史懲罰 + Σλ · 鬆弛</em>，
-        並同時滿足熱量區間、蛋白質下限、糖／鈉上限與商品數量等多重限制。</p>
-    <p>4. <strong>多樣性</strong>：你近期吃過的商品在下一次推薦時會受到歷史懲罰，避免反覆推薦同樣的東西。</p>
+    <h2 class="card-title">模型背後在做什麼</h2>
+    <div class="explain-steps">
+      <div class="explain-step">
+        <div class="n">1</div>
+        <h4>個人化熱量需求</h4>
+        <p>以 Mifflin–St Jeor 公式，將性別、年齡、身高、體重、活動量換算成每日熱量 (TDEE)，再依減脂 −500、增肌 +300 調整。</p>
+      </div>
+      <div class="explain-step">
+        <div class="n">2</div>
+        <h4>情境縮放</h4>
+        <p>依輕食 / 正餐 / 宵夜型，將每日需求分配為單餐區間（如正餐約 30–45% 熱量）。</p>
+      </div>
+      <div class="explain-step">
+        <div class="n">3</div>
+        <h4>最佳化求解</h4>
+        <p>在 580+ 真實全家商品與優惠組合中，求 min α·成本 − β·蛋白 + γ·歷史懲罰，同時滿足熱量、蛋白、糖、鈉與商品數量限制。</p>
+      </div>
+      <div class="explain-step">
+        <div class="n">4</div>
+        <h4>分層口味記憶</h4>
+        <p>仿作業系統多層佇列：越近期吃過的商品（與同類別）懲罰越重，越久遠的逐層淡出，再次出現則跳回最上層，避免反覆推薦同樣的東西。</p>
+      </div>
+    </div>
   </section>
 </main>
 
 <footer>
-  <small>資料來源：全家便利商店食在購安心 API
-    (<code>foodsafety.family.com.tw</code>) · 價格依類別均價估計 · 模型細節見 final report</small>
+  資料來源：全家便利商店食在購安心 API
+  (<code>foodsafety.family.com.tw</code>) · 鮮食為促銷頁實際分級價、其餘為市售行情校正價 · 模型細節見 final report
 </footer>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=7"></script>
 </body>
 </html>

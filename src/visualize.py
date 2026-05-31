@@ -147,11 +147,14 @@ def fig_gamma_diversity():
     rows = _load(RES / "sensitivity.csv")
     gamma_rows = [r for r in rows if r["instance"].startswith("gamma=")]
     gammas = [float(r["instance"].split("=")[1]) for r in gamma_rows]
-    # check whether the recent items {22, 42, 50} reappear
+    # baseline = the gamma=0 optimum's items (the "recent history" that was
+    # injected); count how many of them reappear as gamma grows.
+    base_row = next((r for r in gamma_rows if abs(float(r["instance"].split("=")[1])) < 1e-9), gamma_rows[0])
+    base_set = set(int(x) for x in base_row["items"].split("|") if x)
     repeats = []
     for r in gamma_rows:
         ids = set(int(x) for x in r["items"].split("|") if x)
-        repeats.append(len({22, 42, 50} & ids))
+        repeats.append(len(base_set & ids))
     costs = [float(r["cost"]) for r in gamma_rows]
 
     fig, ax1 = plt.subplots(figsize=(7, 4))
@@ -235,6 +238,37 @@ def fig_realworld_breakdown():
     plt.close()
 
 
+def fig_price_of_diversity():
+    """想法 1 — the price-of-diversity curve: as the epsilon-optimal sampling
+    window grows, more distinct meals become reachable, but the average cost
+    premium over the MILP optimum rises. Shows the diversity/optimality trade-off."""
+    path = RES / "price_of_diversity.csv"
+    if not path.exists():
+        return
+    rows = _load(path)
+    eps      = [float(r["eps"]) for r in rows]
+    distinct = [int(r["distinct_meals"]) for r in rows]
+    premium  = [float(r["cost_premium"]) for r in rows]
+
+    x = range(len(eps))
+    fig, ax1 = plt.subplots(figsize=(7, 4))
+    ax1.bar(x, distinct, color="#1f77b4", alpha=0.75, label="不同餐點數")
+    ax1.set_xticks(list(x))
+    ax1.set_xticklabels([f"{e:.0f}" for e in eps])
+    ax1.set_xlabel("ε-最佳取樣窗 (元)")
+    ax1.set_ylabel("可產生的不同餐點數", color="#1f77b4")
+    ax1.tick_params(axis="y", labelcolor="#1f77b4")
+    ax2 = ax1.twinx()
+    ax2.plot(list(x), premium, "s--", color="#d62728", label="平均成本溢價")
+    ax2.set_ylabel("平均成本溢價 (元，vs. 最佳解)", color="#d62728")
+    ax2.tick_params(axis="y", labelcolor="#d62728")
+    ax1.set_title("多樣性的代價：ε-最佳取樣的多樣性 vs. 成本溢價")
+    ax1.grid(axis="y", alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(FIG / "fig_price_of_diversity.png", dpi=180)
+    plt.close()
+
+
 if __name__ == "__main__":
     fig_gap_by_size()
     fig_runtime_by_size()
@@ -242,4 +276,5 @@ if __name__ == "__main__":
     fig_gamma_diversity()
     fig_feasibility()
     fig_realworld_breakdown()
+    fig_price_of_diversity()
     print("Figures written to", FIG)

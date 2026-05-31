@@ -12,6 +12,7 @@ import csv
 import sys
 from dataclasses import asdict
 from pathlib import Path
+from statistics import mean
 from typing import Dict, List, Optional
 
 ROOT = Path(__file__).parent
@@ -130,16 +131,62 @@ def run_sensitivity(out_path: Path) -> None:
         sol = solve_milp(inst, meal, w, budget=profile.budget, time_limit=15.0)
         rows.append(_row_from_sol("MILP", sol, f"beta={beta}", meal.cal_min, meal.protein_min))
 
-    # history-effect: simulate the user just had 茶葉蛋(22), 鮭魚飯(42), 豆漿(50)
-    # (these are in the gamma=0 optimum, so penalty should drive them out)
-    inst_with_hist = load_real_instance(str(ROOT.parent / "data"))
-    inst_with_hist.history = [22, 42, 50]
+    # history effect: dynamically take the gamma=0 optimum's items as the recent
+    # history, then sweep gamma to show the tiered-memory penalty drives them out.
+    # gamma_cat is held at 0 here to isolate the ITEM-level history effect.
+    base = load_real_instance(str(ROOT.parent / "data"))
+    sol0 = solve_milp(base, meal, Weights(gamma=0.0, gamma_cat=0.0),
+                      budget=profile.budget, time_limit=15.0)
+    hist_items = list(sol0.items_total)
     for gamma in [0.0, 1.0, 2.0, 5.0, 10.0, 20.0]:
-        w = Weights(gamma=gamma)
+        inst_with_hist = load_real_instance(str(ROOT.parent / "data"))
+        inst_with_hist.history = list(hist_items)
+        w = Weights(gamma=gamma, gamma_cat=0.0)
         sol = solve_milp(inst_with_hist, meal, w, budget=profile.budget, time_limit=15.0)
         rows.append(_row_from_sol("MILP", sol, f"gamma={gamma}",
                                   meal.cal_min, meal.protein_min))
 
+    _write_csv(out_path, rows)
+
+
+def run_price_of_diversity(out_path: Path) -> None:
+    """想法 1 — quantify the *price of diversity*.
+
+    The recommender samples uniformly among epsilon-optimal solutions, i.e. the
+    set { s : z(s) <= z* + epsilon }.  We sweep the window epsilon and measure,
+    over many random seeds, (a) how many DISTINCT meals the sampler can produce
+    and (b) the average objective/cost premium paid relative to the MILP optimum
+    z*.  The resulting curve is the cost of diversity: how much variety you buy
+    per NT$ of optimality you give up.
+    """
+    inst = load_real_instance(str(ROOT.parent / "data"))
+    profile = UserProfile("M", 22, 175, 70, "mid", "maintain", 120, "regular")
+    meal = to_meal_target(compute_daily_target(profile), "regular")
+    w = Weights()
+    z_opt = solve_milp(inst, meal, w, budget=profile.budget, time_limit=30.0).obj
+
+    rows: List[Dict] = []
+    for eps in [0.0, 2.0, 4.0, 8.0, 16.0, 32.0]:
+        pool = solve_milp(inst, meal, w, budget=profile.budget, time_limit=60.0,
+                          pool_eps=eps, pool_max=800)
+        # distinct meals whose objective is within eps of the optimum
+        meals = [(ids, cost, o) for (ids, cost, o) in pool if o <= z_opt + eps + 1e-6]
+        n = len(meals)
+        avg_cost = mean(c for _, c, _ in meals) if meals else float("nan")
+        min_cost = min(c for _, c, _ in meals) if meals else float("nan")
+        max_cost = max(c for _, c, _ in meals) if meals else float("nan")
+        rows.append({
+            "eps": eps,
+            "distinct_meals": n,
+            "min_cost": round(min_cost, 2),
+            "avg_cost": round(avg_cost, 2),
+            "max_cost": round(max_cost, 2),
+            "milp_opt_obj": round(z_opt, 3),
+            "cost_premium": round(avg_cost - min_cost, 2),
+        })
+        print(f"[div] eps={eps:>4}: distinct meals={n:>3}  "
+              f"cost NT${min_cost:.0f}-{max_cost:.0f}  "
+              f"avg-premium=NT${avg_cost - min_cost:.1f}")
     _write_csv(out_path, rows)
 
 
@@ -173,4 +220,6 @@ if __name__ == "__main__":
     run_random(out_dir / "random.csv")
     print(">>> sensitivity sweep")
     run_sensitivity(out_dir / "sensitivity.csv")
+    print(">>> price of diversity (想法 1)")
+    run_price_of_diversity(out_dir / "price_of_diversity.csv")
     print(">>> done.")
