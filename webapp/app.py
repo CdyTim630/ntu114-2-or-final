@@ -25,6 +25,9 @@ from heuristic_proposed import solve_grasp
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["SECRET_KEY"] = "or-final-project-2026"
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+# re-read templates from disk on every request so HTML edits show up on a plain
+# browser refresh — no server restart needed (debug stays off, no debugger exposed)
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 
 @app.after_request
@@ -159,6 +162,20 @@ def api_recommend():
 def api_reset_history():
     session["history"] = []
     return jsonify({"ok": True})
+
+
+@app.route("/api/history")
+def api_history():
+    """Current session taste-memory, formatted like the recommend response's
+    `history` field so the front-end can render it on demand (modal)."""
+    pmap = {p.pid: p for p in INSTANCE.products}
+    hist = session.get("history", [])
+    return jsonify({"ok": True, "history": [
+        {"pid": pid, "name": pmap[pid].name,
+         "category": pmap[pid].category,
+         "tier": history_tier(r),
+         "tier_label": HISTORY_TIER_LABELS[min(history_tier(r), len(HISTORY_TIER_LABELS) - 1)]}
+        for r, pid in enumerate(hist, start=1) if pid in pmap]})
 
 
 @app.route("/api/products")

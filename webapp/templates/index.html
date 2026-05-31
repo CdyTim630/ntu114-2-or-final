@@ -2,17 +2,35 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<title>便利商店個人化餐食推薦 — Group 13</title>
-<link rel="stylesheet" href="/static/style.css?v=7">
+<title>便利商店最佳化餐食推薦 — Group 13</title>
+<link rel="stylesheet" href="/static/style.css?v=9">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
 <header>
   <div class="header-inner">
-    <div>
-      <h1>便利商店個人化餐食推薦</h1>
-      <p class="sub">NTU 114-2 OR Final Project · Group 13 · MILP + GRASP-LS</p>
+    <span class="header-icon left" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/>
+        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+        <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/>
+        <path d="M2 7h20"/>
+        <path d="M22 7v3a2 2 0 0 1-2 2 2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12 2 2 0 0 1 2 10V7"/>
+      </svg>
+    </span>
+    <div class="header-title">
+      <h1>便利商店最佳化餐食推薦</h1>
+      <p class="sub">114-2 Operations Research Final Project · Group 13</p>
     </div>
+    <span class="header-icon right" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 2v4.5M8 2v4.5M11 2v4.5"/>
+        <path d="M5 6.5c0 1.4 1.3 2 3 2s3-.6 3-2"/>
+        <path d="M8 8.5V22"/>
+        <ellipse cx="16.5" cy="6" rx="2.7" ry="4"/>
+        <path d="M16.5 10V22"/>
+      </svg>
+    </span>
   </div>
 </header>
 
@@ -31,7 +49,7 @@
         <label>體重 (kg) <input type="number" step="0.1" name="weight" value="65" required></label>
         <label>活動量
           <select name="activity">
-            <option value="low">低（少坐少動）</option>
+            <option value="low">低（多坐少動）</option>
             <option value="mid" selected>中（每週運動 1-3 次）</option>
             <option value="high">高（每天運動）</option>
           </select>
@@ -47,7 +65,7 @@
           <select name="scenario">
             <option value="light">輕食</option>
             <option value="regular" selected>正餐</option>
-            <option value="latenight">宵夜型</option>
+            <option value="latenight">宵夜</option>
           </select>
         </label>
         <label>預算上限 (NT$) <input type="number" name="budget" value="120" min="40" required></label>
@@ -56,13 +74,13 @@
       <details>
         <summary>進階：模型權重設定</summary>
         <div class="grid">
-          <label>成本權重 α
+          <label>成本權重 <span class="formula">α</span>
             <input type="range" name="alpha" min="0" max="3" step="0.1" value="1" oninput="this.nextElementSibling.textContent=this.value">
             <span>1</span></label>
-          <label>蛋白質權重 β
+          <label>蛋白質權重 <span class="formula">β</span>
             <input type="range" name="beta" min="0" max="4" step="0.1" value="0.5" oninput="this.nextElementSibling.textContent=this.value">
             <span>0.5</span></label>
-          <label>多樣性權重 γ
+          <label>多樣性權重 <span class="formula">γ</span>
             <input type="range" name="gamma" min="0" max="10" step="0.5" value="6" oninput="this.nextElementSibling.textContent=this.value">
             <span>6</span></label>
           <label>求解器
@@ -75,7 +93,7 @@
       </details>
       <div class="btns">
         <button type="submit" class="primary">推薦這一餐</button>
-        <button type="button" id="reset-history" class="secondary">清空近期紀錄</button>
+        <button type="button" id="view-history" class="secondary">近期紀錄</button>
       </div>
     </form>
   </section>
@@ -85,7 +103,7 @@
 
     <div id="result-placeholder" class="placeholder">
       <p>填好左側條件後，點擊「推薦這一餐」</p>
-      <p class="sub">推薦的商品清單、營養分析與單餐限制達成度將顯示在這裡。</p>
+      <p class="sub">推薦商品清單、營養分析與限制達成度將顯示於此</p>
     </div>
 
     <div id="result-body" style="display:none">
@@ -94,16 +112,12 @@
       <div id="item-list"></div>
       <div class="section-label">單餐限制達成度</div>
       <div id="targets"></div>
-      <details open>
-        <summary>口味記憶（越近期吃過的，越不會再被推薦；久未出現會慢慢淡出）</summary>
-        <div id="history"></div>
-      </details>
       <div class="meta" id="meta"></div>
     </div>
   </section>
 
   <section class="card explain-card">
-    <h2 class="card-title">模型背後在做什麼</h2>
+    <h2 class="card-title">模型在做什麼：</h2>
     <div class="explain-steps">
       <div class="explain-step">
         <div class="n">1</div>
@@ -113,17 +127,22 @@
       <div class="explain-step">
         <div class="n">2</div>
         <h4>情境縮放</h4>
-        <p>依輕食 / 正餐 / 宵夜型，將每日需求分配為單餐區間（如正餐約 30–45% 熱量）。</p>
+        <p>依情境把每日熱量分配為單餐區間：</p>
+        <ul>
+          <li>輕食約 15–25%（最多 3 項）</li>
+          <li>正餐約 30–45%（最多 5 項）</li>
+          <li>宵夜約 5–15%（最多 3 項）</li>
+        </ul>
       </div>
       <div class="explain-step">
         <div class="n">3</div>
         <h4>最佳化求解</h4>
-        <p>在 580+ 真實全家商品與優惠組合中，求 min α·成本 − β·蛋白 + γ·歷史懲罰，同時滿足熱量、蛋白、糖、鈉與商品數量限制。</p>
+        <p>在 580+ 真實全家商品與優惠組合中，求出「<span class="formula">min α·成本 − β·蛋白 + γ·歷史懲罰</span>」，同時盡量滿足熱量、蛋白、糖、鈉與商品數量等限制。</p>
       </div>
       <div class="explain-step">
         <div class="n">4</div>
         <h4>分層口味記憶</h4>
-        <p>仿作業系統多層佇列：越近期吃過的商品（與同類別）懲罰越重，越久遠的逐層淡出，再次出現則跳回最上層，避免反覆推薦同樣的東西。</p>
+        <p>使用多層佇列記憶：越近期吃過的商品（及同類品項）懲罰越重，越久遠的逐層淡出，避免反覆推薦同樣的東西。</p>
       </div>
     </div>
   </section>
@@ -131,9 +150,23 @@
 
 <footer>
   資料來源：全家便利商店食在購安心 API
-  (<code>foodsafety.family.com.tw</code>) · 鮮食為促銷頁實際分級價、其餘為市售行情校正價 · 模型細節見 final report
+  (<code>foodsafety.family.com.tw</code>)&nbsp;&nbsp;|&nbsp;&nbsp;鮮食為促銷頁實際分級價、其餘為市售行情校正價&nbsp;&nbsp;|&nbsp;&nbsp;模型細節見 Final Report
 </footer>
 
-<script src="/static/app.js?v=7"></script>
+<div id="history-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="history-modal-title">
+    <div class="modal-head">
+      <h3 id="history-modal-title">口味記憶</h3>
+      <button type="button" class="modal-close" id="history-modal-close" aria-label="關閉">×</button>
+    </div>
+    <p class="modal-desc">越近期吃過的，越不會再被推薦；久未出現會慢慢淡出口味記憶</p>
+    <div id="history"></div>
+    <div class="modal-foot">
+      <button type="button" id="reset-history" class="secondary">清空近期紀錄</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js?v=9"></script>
 </body>
 </html>

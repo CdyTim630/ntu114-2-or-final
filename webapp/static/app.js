@@ -86,10 +86,10 @@ function renderFull(d) {
   const t = d.targets, totals = d.totals;
 
   $("#meal-summary").innerHTML = `<div class="summary-line">
+    <div class="stat"><span class="k">本餐花費</span><span class="v accent num">NT$${totals.cost}</span></div>
     <div class="stat"><span class="k">求解器</span><span class="v">${d.solver.toUpperCase()}</span></div>
-    <div class="stat"><span class="k">花費</span><span class="v accent num">NT$${totals.cost}</span></div>
     <div class="stat"><span class="k">目標值</span><span class="v num">${d.obj}</span></div>
-    <div class="stat"><span class="k">耗時</span><span class="v num">${d.runtime_ms} ms</span></div>
+    <div class="stat"><span class="k">計算耗時</span><span class="v num">${d.runtime_ms} ms</span></div>
   </div>`;
 
   $("#targets").innerHTML = nutritionGrid(t, totals);
@@ -146,15 +146,34 @@ function renderHistory(history) {
         <span class="hist-chips">${chips}</span>
       </div>`;
   }
-  // tier 3+ : collapse to a count
+  // tier 3+ : collapse to a count that expands on click
   const far = (groups[3] || []).concat(groups[4] || []);
   if (far.length) {
+    const farChips = far.map(h => `<span class="hist-chip faint">${h.name}</span>`).join("");
     html += `<div class="hist-tier">
-        <span class="hist-tier-label">更久以前</span>
-        <span class="hist-chips"><span class="hist-chip faint">+${far.length} 項</span></span>
+        <span class="hist-tier-label">更久前</span>
+        <span class="hist-chips">
+          <button type="button" class="hist-chip faint hist-more">+${far.length} 項</button>
+          <span class="hist-more-items" hidden>${farChips}</span>
+        </span>
       </div>`;
   }
   elHist.innerHTML = html;
+
+  // let the "+N 項" chip expand / collapse the older items
+  const moreBtn = elHist.querySelector(".hist-more");
+  if (moreBtn) {
+    moreBtn.addEventListener("click", () => {
+      const items = elHist.querySelector(".hist-more-items");
+      if (items.hasAttribute("hidden")) {
+        items.removeAttribute("hidden");
+        moreBtn.textContent = "收起";
+      } else {
+        items.setAttribute("hidden", "");
+        moreBtn.textContent = `+${items.childElementCount} 項`;
+      }
+    });
+  }
 }
 
 form.addEventListener("submit", async (e) => {
@@ -184,5 +203,42 @@ form.addEventListener("submit", async (e) => {
 
 $("#reset-history").addEventListener("click", async () => {
   await fetch("/api/reset_history", { method: "POST" });
-  renderHistory([]);
+  renderHistory([]);   // keep the modal open, now showing "尚無紀錄"
+});
+
+// ---- history modal (口味記憶) ----
+const historyModal = $("#history-modal");
+
+async function openHistory() {
+  // always pull the latest session history so the panel is correct even before
+  // the first recommendation
+  try {
+    const res = await fetch("/api/history");
+    const d = await res.json();
+    renderHistory(d.ok ? d.history : []);
+  } catch {
+    renderHistory([]);
+  }
+  historyModal.hidden = false;
+}
+function closeHistory() { historyModal.hidden = true; }
+
+$("#view-history").addEventListener("click", openHistory);
+$("#history-modal-close").addEventListener("click", closeHistory);
+historyModal.addEventListener("click", (e) => {
+  if (e.target === historyModal) closeHistory();   // click the dim backdrop to close
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !historyModal.hidden) closeHistory();
+});
+
+// ---- weight sliders: paint the deep-green (left) / grey (right) split ----
+function paintRange(el) {
+  const min = +el.min || 0, max = +el.max || 100;
+  const pct = max > min ? ((el.value - min) / (max - min)) * 100 : 0;
+  el.style.setProperty("--p", pct + "%");
+}
+$$('input[type="range"]').forEach((el) => {
+  paintRange(el);
+  el.addEventListener("input", () => paintRange(el));
 });
