@@ -18,14 +18,21 @@ from preprocessing import MealTarget
 class Weights:
     alpha: float = 1.0           # cost
     beta: float = 0.5            # protein bonus
-    gamma: float = 2.0           # history penalty
+    gamma: float = 2.0           # history penalty (same ITEM seen recently)
+    gamma_cat: float = 8.0       # diversity penalty (same CATEGORY seen recently)
     lam_pro: float = 6.0
     lam_fat_lo: float = 2.0
     lam_fat_hi: float = 3.0
     lam_carb_lo: float = 1.0
     lam_carb_hi: float = 1.5
     lam_sug: float = 4.0
-    lam_sod: float = 0.05
+    lam_sod: float = 0.15            # raised so the optimiser actively avoids salt
+
+
+# Sodium is convenience food's worst offender (it was over target ~70% of the
+# time). Keep it soft so feasibility is preserved, but cap the worst case with a
+# hard ceiling at this multiple of the per-meal sodium target.
+SOD_HARD_MULT = 1.5
 
 
 @dataclass
@@ -42,30 +49,103 @@ class Solution:
     gap: float = 0.0
 
 
-def history_penalty(instance: Instance, L: int = 5) -> Dict[int, float]:
-    """h_i = sum over the last L records of (L - r + 1) if item i was used in the r-th most recent record."""
+# ---------------------------------------------------------------------------
+# Tiered recency penalty (MLFQ-style, like an OS multi-level feedback queue).
+#
+# The recommendation history is an ordered list of distinct items, most-recent
+# first. Each item sits in a TIER decided by its recency rank: the most-recent
+# items are in the top tier (strongly avoided), and items age DOWN into lower
+# tiers with a smaller penalty as newer meals push them back. The bottom band
+# carries weight ~0, so an item effectively "leaves memory" once it ages past
+# the last band (and we drop it from storage at HISTORY_MAX). Re-recommending an
+# item moves it back to rank 1 -> top tier (promotion). Within a tier, items
+# stay ordered by recency.
+HISTORY_TIER_BOUNDS  = [3, 8, 16, 30]              # rank upper-bound of tiers 0..3
+HISTORY_TIER_WEIGHTS = [5.0, 2.5, 1.0, 0.3, 0.0]   # penalty weight per tier (last=0)
+HISTORY_MAX = HISTORY_TIER_BOUNDS[-1]              # keep this many distinct items
+HISTORY_TIER_LABELS = ["剛吃過", "前幾餐", "久未推", "更久以前"]
+
+
+def history_tier(rank: int) -> int:
+    """0-indexed tier for a 1-indexed recency rank (rank 1 = most recent)."""
+    for t, ub in enumerate(HISTORY_TIER_BOUNDS):
+        if rank <= ub:
+            return t
+    return len(HISTORY_TIER_BOUNDS)
+
+
+def aged_weight(rank: int) -> float:
+    """Tiered penalty weight for an item at the given recency rank."""
+    return HISTORY_TIER_WEIGHTS[history_tier(rank)]
+
+
+def history_penalty(instance: Instance, L: int = HISTORY_MAX) -> Dict[int, float]:
+    """h_i = tiered recency weight of item i (0 if it is not in recent history)."""
     h: Dict[int, float] = {p.pid: 0.0 for p in instance.products}
-    recent = instance.history[:L]
-    for r, pid in enumerate(recent, start=1):
+    for r, pid in enumerate(instance.history[:L], start=1):
         if pid in h:
-            h[pid] += float(L - r + 1)
+            h[pid] += aged_weight(r)
     return h
+
+
+def category_penalty(instance: Instance, L: int = HISTORY_MAX) -> Dict[int, float]:
+    """g_i = tiered recency weight accumulated over item i's whole CATEGORY.
+    Penalising the whole category (not just the exact item) stops the optimiser
+    from swapping one 豆漿 variant for another and calling it 'diverse' — after a
+    乳製品 is recommended, every 乳製品 is discouraged next time, forcing a
+    genuinely different food type."""
+    pmap = {p.pid: p for p in instance.products}
+    cat_weight: Dict[str, float] = {}
+    for r, pid in enumerate(instance.history[:L], start=1):
+        p = pmap.get(pid)
+        if p and p.category:
+            cat_weight[p.category] = cat_weight.get(p.category, 0.0) + aged_weight(r)
+    return {p.pid: cat_weight.get(p.category, 0.0) for p in instance.products}
+
+
+def combined_penalty(instance: Instance, w: "Weights", L: int = HISTORY_MAX) -> Dict[int, float]:
+    """Per-item penalty folding BOTH the item-level history penalty and the
+    category-level diversity penalty into one dict, so the existing objective
+    term ``w.gamma * sum(h_i x_i)`` carries both. The fold is exact: the effective
+    category coefficient works out to ``gamma_cat`` (independent of ``gamma``)::
+
+        w.gamma * (h_item + (gamma_cat/gamma) * g_cat) = gamma*h_item + gamma_cat*g_cat
+
+    If ``gamma`` is 0 the history term vanishes entirely (diversity disabled)."""
+    h = history_penalty(instance, L)
+    if not w.gamma:
+        return h
+    g = category_penalty(instance, L)
+    ratio = w.gamma_cat / w.gamma
+    return {pid: h.get(pid, 0.0) + ratio * g.get(pid, 0.0) for pid in h}
 
 
 def solve_milp(instance: Instance, meal: MealTarget, w: Weights,
                budget: Optional[float] = None,
                time_limit: float = 60.0, mip_gap: float = 1e-4,
-               verbose: bool = False) -> Optional[Solution]:
+               verbose: bool = False,
+               pool_eps: Optional[float] = None, pool_max: int = 600):
+    """Solve the meal-recommendation MILP.
+
+    Normally returns the single optimal ``Solution`` (or None if infeasible).
+    If ``pool_eps`` is set, instead enumerates the epsilon-optimal SET via
+    Gurobi's solution pool and returns a list of distinct meals
+    ``[(frozenset_of_item_ids, cost, obj), ...]`` whose objective is within
+    ``pool_eps`` of the optimum — used to measure the price of diversity."""
     P = instance.products
     K = instance.combos
     pid2idx = {p.pid: i for i, p in enumerate(P)}
-    h = history_penalty(instance)
+    h = combined_penalty(instance, w)
 
     m = gp.Model("conv_meal")
     if not verbose:
         m.Params.OutputFlag = 0
     m.Params.TimeLimit = time_limit
     m.Params.MIPGap = mip_gap
+    if pool_eps is not None:
+        m.Params.PoolSearchMode = 2          # find the n best solutions
+        m.Params.PoolSolutions = pool_max
+        m.Params.PoolGapAbs = pool_eps       # keep solutions within eps of opt
 
     a = m.addVars(len(P), vtype=GRB.BINARY, name="a")
     y = m.addVars(len(K), vtype=GRB.BINARY, name="y")
@@ -121,20 +201,30 @@ def solve_milp(instance: Instance, meal: MealTarget, w: Weights,
     m.addConstr(carb_total - sCarH <= meal.carb_max, name="carb_hi")
     # (7) sugar upper (soft)
     m.addConstr(sug_total - sSug <= meal.sugar_max, name="sugar_hi")
-    # (8) sodium upper (soft)
+    # (8) sodium upper (soft) + hard ceiling so a meal can't be egregiously salty
     m.addConstr(sod_total - sSod <= meal.sodium_max, name="sodium_hi")
+    m.addConstr(sod_total <= meal.sodium_max * SOD_HARD_MULT, name="sodium_ceiling")
     # (9) count upper (hard)
     m.addConstr(count_total <= meal.n_max, name="count")
     # at least 1 item
     m.addConstr(count_total >= 1, name="count_lo")
 
-    # (10) regular mode -> at least 1 main
+    # ---- meal-structure constraints (realistic basket shape) ----
+    # At most one drink and one dessert/snack in any meal, so the optimiser can't
+    # build a "meal" out of three snacks or two drinks.
+    drinks   = [i for i, p in enumerate(P) if p.role == "drink"]
+    desserts = [i for i, p in enumerate(P) if p.role == "dessert"]
+    if drinks:
+        m.addConstr(gp.quicksum(x_expr(i) for i in drinks) <= 1, name="max_one_drink")
+    if desserts:
+        m.addConstr(gp.quicksum(x_expr(i) for i in desserts) <= 1, name="max_one_dessert")
+    # (10) regular mode -> exactly one staple main (no "two breads" meals)
     # (11) regular mode -> at least 1 protein source
     if meal.n_max >= 4:  # treat regular if cap is large
         mains = [i for i, p in enumerate(P) if p.is_main]
         proteins = [i for i, p in enumerate(P) if p.is_protein]
         if mains:
-            m.addConstr(gp.quicksum(x_expr(i) for i in mains) >= 1, name="has_main")
+            m.addConstr(gp.quicksum(x_expr(i) for i in mains) == 1, name="exactly_one_main")
         if proteins:
             m.addConstr(gp.quicksum(x_expr(i) for i in proteins) >= 1, name="has_protein")
 
@@ -152,6 +242,23 @@ def solve_milp(instance: Instance, meal: MealTarget, w: Weights,
 
     if m.SolCount == 0:
         return None
+
+    if pool_eps is not None:
+        # enumerate the epsilon-optimal set: distinct meals (item-set) keyed to
+        # avoid double-counting symmetric single/combo encodings of the same meal
+        pool: Dict[frozenset, Tuple[float, float]] = {}
+        for s in range(m.SolCount):
+            m.Params.SolutionNumber = s
+            ids = {P[i].pid for i in range(len(P)) if a[i].Xn > 0.5}
+            cost = sum(P[i].price for i in range(len(P)) if a[i].Xn > 0.5)
+            for k in range(len(K)):
+                if y[k].Xn > 0.5:
+                    ids.update(K[k].item_ids)
+                    cost += K[k].promo_price
+            key = frozenset(ids)
+            if key not in pool or m.PoolObjVal < pool[key][1]:
+                pool[key] = (cost, m.PoolObjVal)
+        return [(k, v[0], v[1]) for k, v in pool.items()]
 
     items_alone = [P[i].pid for i in range(len(P)) if a[i].X > 0.5]
     combos_picked = [K[k].cid for k in range(len(K)) if y[k].X > 0.5]

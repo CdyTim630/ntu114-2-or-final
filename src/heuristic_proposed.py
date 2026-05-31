@@ -22,7 +22,7 @@ import time
 
 from data_loader import Instance, Product, Combo
 from preprocessing import MealTarget
-from model_milp import Weights, Solution, history_penalty
+from model_milp import Weights, Solution, history_penalty, combined_penalty, SOD_HARD_MULT
 
 
 @dataclass
@@ -91,11 +91,19 @@ def _objective(state: _State, instance: Instance, meal: MealTarget,
     # hard: budget
     if budget is not None and agg["cost"] > budget + 1e-6:
         return float("inf"), False, agg
-    # hard: regular mode requires main + protein
+    # hard: sodium ceiling — can't be egregiously salty
+    if agg["sod"] > meal.sodium_max * SOD_HARD_MULT:
+        return float("inf"), False, agg
+    # hard: meal structure — at most one drink and one dessert/snack
+    n_drink   = sum(1 for pid in items if pmap[pid].role == "drink")
+    n_dessert = sum(1 for pid in items if pmap[pid].role == "dessert")
+    if n_drink > 1 or n_dessert > 1:
+        return float("inf"), False, agg
+    # hard: regular mode requires exactly one staple main + a protein source
     if meal.n_max >= 4:
-        has_main = any(pmap[pid].is_main for pid in items)
-        has_pro  = any(pmap[pid].is_protein for pid in items)
-        if not (has_main and has_pro):
+        n_main  = sum(1 for pid in items if pmap[pid].is_main)
+        has_pro = any(pmap[pid].is_protein for pid in items)
+        if n_main != 1 or not has_pro:
             return float("inf"), False, agg
 
     # soft penalties
@@ -175,16 +183,47 @@ def _construct(instance: Instance, meal: MealTarget, w: Weights,
             if feas or len(chosen.item_ids) <= meal.n_max:
                 state.combos_picked.append(chosen.cid)
 
+    regular = meal.n_max >= 4
+
+    def role_counts() -> Dict[str, int]:
+        rc = {"main": 0, "drink": 0, "dessert": 0, "side": 0}
+        for pid in state.covered_items(instance):
+            rc[pmap[pid].role] = rc.get(pmap[pid].role, 0) + 1
+        return rc
+
+    # Seed exactly one staple main for a regular meal (unless a combo already
+    # supplied one), so the construction starts structurally valid instead of
+    # relying on local search to repair a 0- or 2-main basket.
+    if regular and role_counts()["main"] == 0:
+        agg0 = _agg(state, instance)
+        main_cand = [(p, sc) for p, sc in item_pri
+                     if p.is_main
+                     and (budget is None or agg0["cost"] + p.price <= budget)
+                     and agg0["cal"] + p.cal <= meal.cal_max]
+        if main_cand:
+            main_cand.sort(key=lambda x: x[1], reverse=True)
+            smax, smin = main_cand[0][1], main_cand[-1][1]
+            thr = smax - rcl_alpha * (smax - smin) if smax != smin else smin
+            state.items_alone.append(rng.choice([p for p, sc in main_cand if sc >= thr]).pid)
+
     # Then add single items one by one, respecting all hard constraints.
     while True:
         agg = _agg(state, instance)
         if agg["n"] >= meal.n_max:
             break
-        # candidates: not already covered, and adding does not break budget / cal cap
+        # candidates: not already covered, respect budget / cal cap AND the
+        # meal-structure caps (exactly 1 main for regular, <=1 drink, <=1 dessert)
         covered = state.covered_items(instance)
+        rc = role_counts()
         cand = []
         for p, sc in item_pri:
             if p.pid in covered:
+                continue
+            if p.role == "main" and regular and rc["main"] >= 1:
+                continue
+            if p.role == "drink" and rc["drink"] >= 1:
+                continue
+            if p.role == "dessert" and rc["dessert"] >= 1:
                 continue
             new_cost = agg["cost"] + p.price
             if budget is not None and new_cost > budget:
@@ -320,13 +359,22 @@ def solve_grasp(instance: Instance, meal: MealTarget, w: Weights,
                 budget: Optional[float] = None, n_restarts: int = 15,
                 rcl_alpha_range: Tuple[float, float] = (0.10, 0.40),
                 seed: int = 0,
-                time_limit: float = 30.0) -> Optional[Solution]:
-    rng = random.Random(seed)
-    h = history_penalty(instance)
+                time_limit: float = 30.0,
+                diversify: float = 0.0) -> Optional[Solution]:
+    """GRASP-LS multi-start.
 
-    best_state: Optional[_State] = None
+    `diversify` (>= 0): instead of returning the single best solution, collect
+    every distinct near-optimal solution whose objective is within
+    `diversify` (absolute, in objective units ~ NTD) of the best, and return one
+    at random. This gives a different — but still near-optimal — meal on each
+    call, complementing the history penalty for short-term variety.
+    """
+    rng = random.Random(seed)
+    h = combined_penalty(instance, w)
+
+    # pool of distinct feasible solutions, keyed by the set of covered items
+    pool: Dict[frozenset, Tuple[float, _State, Dict[str, float]]] = {}
     best_obj = float("inf")
-    best_agg: Dict[str, float] = {}
     t0 = time.time()
 
     for r in range(n_restarts):
@@ -336,11 +384,22 @@ def solve_grasp(instance: Instance, meal: MealTarget, w: Weights,
         state = _construct(instance, meal, w, h, budget, alpha, rng)
         state = _local_search(state, instance, meal, w, h, budget)
         obj, feas, agg = _objective(state, instance, meal, w, h, budget)
-        if feas and obj < best_obj:
-            best_obj, best_state, best_agg = obj, state, agg
+        if not feas:
+            continue
+        key = frozenset(state.covered_items(instance))
+        if key not in pool or obj < pool[key][0]:
+            pool[key] = (obj, state, agg)
+        if obj < best_obj:
+            best_obj = obj
 
-    if best_state is None:
+    if not pool:
         return None
+
+    if diversify > 0:
+        near = [v for v in pool.values() if v[0] <= best_obj + diversify]
+        best_obj, best_state, best_agg = rng.choice(near)
+    else:
+        best_obj, best_state, best_agg = min(pool.values(), key=lambda v: v[0])
 
     pmap = {p.pid: p for p in instance.products}
     cmap = {c.cid: c for c in instance.combos}

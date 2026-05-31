@@ -1,8 +1,8 @@
 """Flask web app — interactive convenience-store meal recommender.
 
 Demonstrates the OR model from the report end-to-end:
-  user form  →  Mifflin–St Jeor preprocessing  →  MILP (Gurobi) or GRASP-LS
-  →  recommended meal + nutrition breakdown.
+  user form  ->  Mifflin-St Jeor preprocessing  ->  MILP (Gurobi) or GRASP-LS
+  ->  recommended meal + nutrition breakdown.
 """
 from __future__ import annotations
 import json
@@ -17,12 +17,25 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from data_loader import load_real_instance, Instance, Product
 from preprocessing import UserProfile, compute_daily_target, to_meal_target, SCENARIO_PARAMS
-from model_milp import Weights, solve_milp
+from model_milp import (Weights, solve_milp, history_tier, HISTORY_MAX,
+                        HISTORY_TIER_LABELS)
 from heuristic_proposed import solve_grasp
 
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["SECRET_KEY"] = "or-final-project-2026"
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+
+@app.after_request
+def _no_cache(resp):
+    # Disable caching for BOTH the HTML page and the static assets, otherwise the
+    # browser keeps serving a stale index.html and edits silently don't appear.
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
+
 
 # load the real-world instance once at startup (prefer scraped real data if present)
 DATA_DIR = ROOT / "data"
@@ -58,18 +71,30 @@ def api_recommend():
 
     # apply history from session (cookie)
     hist = session.get("history", [])
-    INSTANCE.history = hist[:5]
+    INSTANCE.history = hist[:HISTORY_MAX]
 
     w = Weights(
         alpha=float(payload.get("alpha", 1.0)),
         beta=float(payload.get("beta", 0.5)),
-        gamma=float(payload.get("gamma", 2.0)),
+        gamma=float(payload.get("gamma", 6.0)),
+        gamma_cat=float(payload.get("gamma_cat", 8.0)),
     )
-    solver = payload.get("solver", "milp")
+    solver = payload.get("solver", "grasp")
     t0 = time.time()
-    sol = (solve_milp(INSTANCE, meal, w, budget=profile.budget, time_limit=20.0)
-           if solver == "milp"
-           else solve_grasp(INSTANCE, meal, w, budget=profile.budget, n_restarts=25, seed=int(time.time()) % 9999))
+    seed = int(time.time() * 1000) % 99999
+    if solver == "milp":
+        sol = solve_milp(INSTANCE, meal, w, budget=profile.budget, time_limit=20.0)
+    else:
+        # diversify: pick at random among near-optimal meals so each click gives
+        # some variety even before the history penalty kicks in. n_restarts /
+        # time_limit kept modest so the page responds in ~2-3 s.
+        sol = solve_grasp(INSTANCE, meal, w, budget=profile.budget, n_restarts=12,
+                          seed=seed, diversify=8.0, time_limit=5.0)
+        if sol is None:
+            # GRASP's greedy path can miss a tight feasible meal (e.g. a snug
+            # budget); fall back to the exact MILP so the user still gets a meal
+            # whenever one exists.
+            sol = solve_milp(INSTANCE, meal, w, budget=profile.budget, time_limit=20.0)
     runtime = time.time() - t0
 
     if sol is None:
@@ -78,13 +103,14 @@ def api_recommend():
     pmap = {p.pid: p for p in INSTANCE.products}
     items = [pmap[pid] for pid in sol.items_total]
 
-    # update history queue (drop oldest beyond 5)
+    # update history queue: newly recommended items go to the front (rank 1 ->
+    # top tier), older ones age down; drop anything past the last tier.
     new_hist = sol.items_total + hist
     seen, dedup = set(), []
     for pid in new_hist:
         if pid in seen: continue
         seen.add(pid); dedup.append(pid)
-    session["history"] = dedup[:5]
+    session["history"] = dedup[:HISTORY_MAX]
 
     return jsonify({
         "ok": True,
@@ -120,7 +146,11 @@ def api_recommend():
         },
         "daily": {k: round(getattr(daily, k), 1)
                   for k in ["cal", "protein", "fat_min", "fat_max", "carb_min", "carb_max"]},
-        "history": session["history"],
+        "history": [{"pid": pid, "name": pmap[pid].name,
+                     "category": pmap[pid].category,
+                     "tier": history_tier(r),
+                     "tier_label": HISTORY_TIER_LABELS[min(history_tier(r), len(HISTORY_TIER_LABELS) - 1)]}
+                    for r, pid in enumerate(session["history"], start=1) if pid in pmap],
         "slacks":  {k: round(v, 1) for k, v in sol.slacks.items()},
     })
 
