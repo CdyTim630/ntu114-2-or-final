@@ -17,6 +17,8 @@
 \usepackage{algpseudocode}
 \usepackage{enumitem}
 \usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc}
 \usepackage{titlesec}
 \titleformat*{\section}{\large\bfseries}
 \titleformat*{\subsection}{\normalsize\bfseries}
@@ -114,7 +116,7 @@ x_i = a_i + \sum_{k:\,i\in S_k} y_k \quad\text{(輔助)}.
 \paragraph{權重的意義：各目標的相對重要性.} 目標函數的權重用來控制各項目標之間的\textbf{相對重要性}：$\alpha$ 對應成本、$\beta$ 對應蛋白質、$\gamma$（與 $\gamma_{\text{cat}}$）對應重複性，各 $\lambda_*$ 則對應各項軟限制被違反的程度。預設 $(\alpha,\beta)=(1,0.5)$ 設定成本與蛋白質之間的權衡幅度，$\lambda_P=6$、$\lambda_{\text{Sug}}=4$、$\lambda_{\text{Sod}}=0.15$ 則決定蛋白質不足、糖與鈉超標各自的懲罰強度。如此把「健康 vs.\ 成本」的取捨參數化，使用者可透過 App 的 slider 直接調整偏好（見 \S\ref{sec:exp} 之敏感度分析）。
 
 \section{Proposed Algorithm: GRASP-LS}\label{sec:alg}
-為避免大規模情境下單純依賴商業 solver 之長時間求解，本研究自行設計一啟發式 \textbf{GRASP-LS}。其結合「貪婪隨機構造（GRC）」與「鄰域局部搜尋（LS）」，並以多重啟動（multi-start）強化全域探索能力。整體流程見演算法 \ref{alg:grasp}。
+為避免大規模情境下單純依賴商業 solver 之長時間求解，本研究自行設計一啟發式 \textbf{GRASP-LS}。其結合「貪婪隨機構造（GRC）」與「鄰域局部搜尋（LS）」，並以多重啟動（multi-start）強化全域探索能力。整體流程見圖 \ref{fig:flow} 與演算法 \ref{alg:grasp}。
 
 \paragraph{核心想法.}
 \begin{enumerate}[leftmargin=*,nosep]
@@ -129,6 +131,35 @@ x_i = a_i + \sum_{k:\,i\in S_k} y_k \quad\text{(輔助)}.
 \sigma(p) = \beta \cdot pro_p - 0.06\alpha\cdot c_p - \gamma h_p - 0.6\tfrac{cal_p}{\text{Cal}^{\max}_m} - \lambda_{\text{Sod}}\tfrac{sod_p}{\text{Sodium}^{\max}_m} - \lambda_{\text{Sug}}\tfrac{sug_p}{\text{Sugar}^{\max}_m} + B_{\text{cat}}(p).
 \end{equation}
 其中 $B_{\text{cat}}(p) = 1.2 \cdot \mathbf{1}(p\in I^S) + 1.5\cdot \mathbf{1}(p\in I^P)$。
+
+\begin{figure}[h]
+\centering
+\scalebox{0.88}{%
+\begin{tikzpicture}[
+  font=\scriptsize, >=Stealth, node distance=4mm,
+  box/.style={rectangle, rounded corners, draw=green!45!black, thick,
+              fill=green!8, align=center, inner sep=3pt, text width=72mm, minimum height=7mm},
+  term/.style={rectangle, rounded corners=9pt, draw=green!45!black, thick,
+               fill=green!22, align=center, inner sep=3pt, text width=58mm, minimum height=6mm},
+  dec/.style={diamond, aspect=2.4, draw=orange!75!black, thick, fill=orange!12,
+              align=center, inner sep=0pt}]
+  \node[term] (in) {Input: items, meal target, budget $B$};
+  \node[box, below=of in] (grc) {\textbf{GRC} --- build RCL by score $\sigma$\\(main first; drink/dessert caps; combos as super-items)};
+  \node[box, below=of grc] (ls) {\textbf{Local Search} (first-improvement)\\swap / drop / add / combo-swap};
+  \node[box, below=of ls] (up) {Update best solution \& pool};
+  \node[dec, below=of up] (dec) {more\\restarts?};
+  \node[term, below=of dec] (out) {Return best meal / sample $\epsilon$-best pool};
+  \draw[->] (in) -- (grc);
+  \draw[->] (grc) -- (ls);
+  \draw[->] (ls) -- (up);
+  \draw[->] (up) -- (dec);
+  \draw[->] (dec) -- node[right]{no} (out);
+  \draw[->] (dec.east) -- ++(2.3cm,0) |- (grc.east);
+  \node[align=left] at ($(dec.east)+(2.55cm,0.95cm)$) {yes\\($\times25$)};
+\end{tikzpicture}}
+\caption{GRASP-LS 整體流程：多重啟動下，每輪以 GRC 建構結構可行的初始解，經局部搜尋改良後更新解池；重複 $K_{\text{restart}}=25$ 次後回傳最佳解（部署時改自 $\epsilon$-最佳解池取樣以增多樣性，緊預算無解時退回 MILP）。}
+\label{fig:flow}
+\end{figure}
 
 \begin{algorithm}[h]
 \caption{GRASP-LS for the Convenience Store Meal Recommendation Problem}

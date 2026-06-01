@@ -8,6 +8,9 @@
 \setbeamercolor{structure}{fg=green!40!black}
 \setbeamertemplate{frametitle}[default][shadow=false]
 \addtobeamertemplate{frametitle}{\vspace{2pt}}{\vspace{2pt}}
+% page number at bottom-right (suppressed on [plain] title frame)
+\setbeamertemplate{footline}{%
+  \hfill{\usebeamercolor[fg]{structure}\scriptsize\insertframenumber}\hspace*{3mm}\vspace*{2mm}}
 \usepackage{xeCJK}
 \setCJKmainfont{Noto Serif TC}
 % Latin text in Times New Roman everywhere (beamer renders body/titles in the
@@ -18,6 +21,7 @@
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc}
 
 \title{Optimization-Based Meal Recommendation for Convenience Stores}
 \subtitle{A MILP and GRASP-LS Framework for Personalized Meal Recommendation}
@@ -34,6 +38,9 @@
   \resizebox{0.95\linewidth}{!}{\color{green!45!black}\bfseries\inserttitle}\\[12pt]
   {\normalsize\insertsubtitle}\\[1.3cm]
   {\footnotesize\insertauthor}
+  \vfill
+  \hbox to \linewidth{\hfill{\usebeamercolor[fg]{structure}\scriptsize\insertframenumber}\hspace*{3mm}}
+  \vspace*{1mm}
 \end{frame}
 
 % ============================================================
@@ -146,13 +153,33 @@ y_k \in \{0,1\}\;(\text{bundle } k)
 \end{itemize}
 \end{frame}
 
-\begin{frame}{GRASP-LS --- Algorithm Flow}
-\begin{itemize}
-  \item \textbf{Greedy Randomized Construction:} build an RCL from composite score $\sigma$ and sample; structure-aware (main first, drink/dessert caps)
-  \item \textbf{Local Search:} first-improvement over swap / drop / add / bundle-swap
-  \item \textbf{Multi-start:} 25 random seeds $\to$ a solution pool
-  \item \textbf{Deployment:} sample the $\epsilon$-best set ($\epsilon=8$); fall back to MILP if a tight budget leaves GRASP-LS infeasible
-\end{itemize}
+\begin{frame}{GRASP-LS --- Algorithm Flowchart}
+\centering
+\begin{tikzpicture}[
+  font=\scriptsize, >=Stealth, node distance=4mm,
+  box/.style={rectangle, rounded corners, draw=green!45!black, thick,
+              fill=green!8, align=center, inner sep=3pt, text width=72mm, minimum height=7mm},
+  term/.style={rectangle, rounded corners=9pt, draw=green!45!black, thick,
+               fill=green!22, align=center, inner sep=3pt, text width=58mm, minimum height=6mm},
+  dec/.style={diamond, aspect=2.4, draw=orange!75!black, thick, fill=orange!12,
+              align=center, inner sep=0pt}]
+  \node[term] (in) {Input: items, meal target, budget $B$};
+  \node[box, below=of in] (grc) {\textbf{GRC} --- build RCL by score $\sigma$\\(main first; drink/dessert caps; combos as super-items)};
+  \node[box, below=of grc] (ls) {\textbf{Local Search} (first-improvement)\\swap / drop / add / combo-swap};
+  \node[box, below=of ls] (up) {Update best solution \& pool};
+  \node[dec, below=of up] (dec) {more\\restarts?};
+  \node[term, below=of dec] (out) {Return best meal / sample $\epsilon$-best pool};
+  \draw[->] (in) -- (grc);
+  \draw[->] (grc) -- (ls);
+  \draw[->] (ls) -- (up);
+  \draw[->] (up) -- (dec);
+  \draw[->] (dec) -- node[right]{no} (out);
+  \draw[->] (dec.east) -- ++(3.3cm,0) |- (grc.east);
+  \node[align=left] at ($(dec.east)+(3.65cm,1.7cm)$) {yes\\($\times25$)};
+\end{tikzpicture}
+
+\vspace{1mm}
+{\scriptsize Deployment samples the $\epsilon$-best pool ($\epsilon=8$) for variety; falls back to MILP if a tight budget leaves GRASP-LS infeasible.}
 \end{frame}
 
 \begin{frame}{Composite Score: How the Heuristic Ranks Candidates}
@@ -185,9 +212,9 @@ y_k \in \{0,1\}\;(\text{bundle } k)
 \column{0.5\textwidth}
 \textbf{Random instances}
 \begin{itemize}
-  \item $|I|$ up to 300, $|K|$ up to 90
-  \item 5 seeds per size = \textbf{30 instances}
+  \item \textbf{Size factors:} $|I|$ up to 300, $|K|$ up to 90; 5 seeds = \textbf{30 instances}
   \item Nutrition \& discounts sampled in realistic ranges
+  \item \textbf{Stress scenarios (2$\times$2):} budget \{tight / loose\} $\times$ protein \{high / loose\} $\Rightarrow$ \textbf{48 runs}
 \end{itemize}
 \end{columns}
 \end{frame}
