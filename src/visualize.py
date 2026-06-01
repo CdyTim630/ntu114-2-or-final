@@ -220,19 +220,37 @@ def fig_realworld_breakdown():
         sods.append(_to_float(r["sod"])  if r["sod"]  not in ("", "inf") else 0)
         costs.append(_to_float(r["cost"]) if r["cost"] not in ("", "inf") else 0)
 
-    fig, axes = plt.subplots(1, 4, figsize=(13, 3.4))
-    for ax, vals, title, ref in zip(
-            axes,
-            [cals, pros, sods, costs],
-            ["熱量 (kcal)", "蛋白質 (g)", "鈉 (mg)", "花費 (NT$)"],
-            [targets["U1_male_cut-regular"][0], targets["U1_male_cut-regular"][1], 960, 120]):
-        bars = ax.bar(solvers, vals, color=["#2ca02c", "#1f77b4", "#d62728"])
-        ax.axhline(ref, ls="--", color="black", alpha=0.5)
-        ax.set_title(title)
+    # clean English display names for the solvers (consistent: GRASP-LS)
+    _label = {"milp": "MILP", "grasp": "GRASP-LS", "greedy": "Greedy",
+              "MILP": "MILP", "GRASP": "GRASP-LS", "Greedy": "Greedy"}
+    xlabels = [_label.get(s, s) for s in solvers]
+
+    fig, axes = plt.subplots(1, 4, figsize=(13, 3.9))
+    panels = [
+        (cals,  "Calories (kcal)", targets["U1_male_cut-regular"][0], "min"),
+        (pros,  "Protein (g)",     targets["U1_male_cut-regular"][1], "min"),
+        (sods,  "Sodium (mg)",     960, "cap"),
+        (costs, "Cost (NT$)",      120, "budget"),
+    ]
+    for ax, (vals, title, ref, kind) in zip(axes, panels):
+        bars = ax.bar(xlabels, vals, color=["#2ca02c", "#1f77b4", "#d62728"])
+        ax.axhline(ref, ls="--", color="black", alpha=0.6, label=f"{kind} = {ref:.0f}")
+        ax.set_title(title, fontsize=14, fontweight="bold")
+        ax.tick_params(axis="x", labelsize=12)
+        ax.tick_params(axis="y", labelsize=10)
+        ax.set_ylim(top=max(vals + [ref]) * 1.28)
+        ax.legend(fontsize=10, loc="upper left", frameon=False)
         for b, v in zip(bars, vals):
             ax.text(b.get_x() + b.get_width()/2, b.get_height(),
-                    f"{v:.0f}", ha="center", va="bottom", fontsize=9)
-    fig.suptitle("U1（男・減脂・正餐）下三種解法的營養與成本對比", y=1.02)
+                    f"{v:.0f}", ha="center", va="bottom", fontsize=12, fontweight="bold")
+    # flag the Greedy sodium violation
+    gi = next((i for i, s in enumerate(xlabels) if s == "Greedy"), None)
+    if gi is not None and sods[gi] > 960:
+        axes[2].text(gi, sods[gi] * 1.12, "violates sodium cap",
+                     ha="center", va="bottom", fontsize=10.5,
+                     color="#d62728", fontweight="bold")
+    fig.suptitle("U1 (male · cut · regular): nutrition & cost across solvers",
+                 y=1.03, fontsize=15, fontweight="bold")
     plt.tight_layout()
     plt.savefig(FIG / "fig_real_breakdown.png", dpi=180, bbox_inches="tight")
     plt.close()

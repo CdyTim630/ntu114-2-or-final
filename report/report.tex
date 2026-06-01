@@ -111,6 +111,8 @@ x_i = a_i + \sum_{k:\,i\in S_k} y_k \quad\text{(輔助)}.
 \end{align}
 其中 (C8b) 為鈉的硬性天花板（軟限制 (C8) 允許略超目標，但任何一餐絕不超過 $1.5\times$ 上限，避免推薦過鹹）；(C10) 限制每餐至多一杯飲料、一份甜點，(C11) 要求正餐恰含一份主餐並至少一個真實蛋白質來源，杜絕「以三件零食或兩瓶飲料湊一餐」「甜點當主菜」之不合理組合。
 
+\paragraph{權重的意義：各目標的相對重要性.} 目標函數的權重用來控制各項目標之間的\textbf{相對重要性}：$\alpha$ 對應成本、$\beta$ 對應蛋白質、$\gamma$（與 $\gamma_{\text{cat}}$）對應重複性，各 $\lambda_*$ 則對應各項軟限制被違反的程度。預設 $(\alpha,\beta)=(1,0.5)$ 設定成本與蛋白質之間的權衡幅度，$\lambda_P=6$、$\lambda_{\text{Sug}}=4$、$\lambda_{\text{Sod}}=0.15$ 則決定蛋白質不足、糖與鈉超標各自的懲罰強度。如此把「健康 vs.\ 成本」的取捨參數化，使用者可透過 App 的 slider 直接調整偏好（見 \S\ref{sec:exp} 之敏感度分析）。
+
 \section{Proposed Algorithm: GRASP-LS}\label{sec:alg}
 為避免大規模情境下單純依賴商業 solver 之長時間求解，本研究自行設計一啟發式 \textbf{GRASP-LS}。其結合「貪婪隨機構造（GRC）」與「鄰域局部搜尋（LS）」，並以多重啟動（multi-start）強化全域探索能力。整體流程見演算法 \ref{alg:grasp}。
 
@@ -211,6 +213,8 @@ x_i = a_i + \sum_{k:\,i\in S_k} y_k \quad\text{(輔助)}.
 $cal\sim \mathcal{U}(180,650)$（主食）或 $\mathcal{U}(15,320)$（非主食），$pro\sim \mathcal{U}(5,30)$（含蛋白質）或 $\mathcal{U}(0,10)$，$sod\sim \mathcal{U}(0,1400)$；
 組合大小 $\in\{2,3\}$，折扣率 $\sim \mathcal{U}(0.80,0.92)$ 之原價。
 
+\textbf{壓力測試情境（factorial scenario design）.} 上述隨機例題僅改變「規模」此一因子。為進一步檢驗 GRASP-LS 在極端條件下的穩健性，本研究另設計一組 $2\times2$ 因子情境：因子一為\textbf{預算水準}（緊 $B=90$／寬 $B=220$），因子二為\textbf{蛋白質目標}（高：增肌目標／寬鬆：維持目標）；於 3 種規模（80／120／200 品項）$\times$ 4 個種子下交叉，共 $4\times3\times4=48$ 個受測例題，各情境同時以 MILP 與 GRASP-LS 求解（程式碼 \texttt{src/run\_extra\_experiments.py}）。結果見 \S\ref{sec:stress}。
+
 \section{Performance Evaluation}\label{sec:exp}
 本節以三種解法相互比較：
 （i）\textbf{Gurobi MILP}（精確解，作為上下界基準）；
@@ -257,7 +261,7 @@ $cal\sim \mathcal{U}(180,650)$（主食）或 $\mathcal{U}(15,320)$（非主食�
 \label{tab:rand}
 \input{../results/tables/random_summary.tex}
 \end{table}
-MILP 在所有規模下均求得最佳解；GRASP-LS 平均 optimality gap 為 \textbf{4.9\%}，hard-feasible 比率 93\%（28/30；兩個無解出現於 $|I|=30,50$ 之緊預算例題——結構限制下貪婪建構偶難在低預算內湊齊「恰一主餐 + 蛋白」之高熱量組合，此時部署版會退回 MILP 後備）。相對地，Greedy baseline 在加入餐型結構 (C10--C11) 與鈉硬上限 (C8b) 後幾乎全面失效：多數規模下 \textbf{0\% 可行}，凸顯單一比值排序無法滿足多重結構限制。
+MILP 在所有規模下均求得最佳解；GRASP-LS 平均 optimality gap 為 \textbf{4.9\%}，hard-feasible 比率 93\%（28/30；兩個無解出現於 $|I|=30,50$ 之緊預算例題——結構限制下貪婪建構偶難在低預算內湊齊「恰一主餐 + 蛋白」之高熱量組合，此時部署版會退回 MILP 後備）。需註明：表 \ref{tab:rand} 之分規模 gap 係各解法於\textbf{各自可行子集}上之平均（分母不同），故 $|I|=30,50$ 因有種子對 GRASP-LS 不可行而出現負值假象；以逐例（per-instance）對齊計算之平均 gap 仍為 \textbf{4.9\%}。相對地，Greedy baseline 在加入餐型結構 (C10--C11) 與鈉硬上限 (C8b) 後幾乎全面失效：多數規模下 \textbf{0\% 可行}，凸顯單一比值排序無法滿足多重結構限制。
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.7\textwidth]{../results/figs/fig_gap_by_size.png}
@@ -266,6 +270,44 @@ MILP 在所有規模下均求得最佳解；GRASP-LS 平均 optimality gap 為 \
 \end{figure}
 
 圖 \ref{fig:rt} 顯示三種解法的 runtime 隨商品數成長之情形。MILP 從 6 ms（$|I|=30$）增長至 227 ms（$|I|=300$）；GRASP-LS 從 17 ms 增長至約 4.2 秒；Greedy 始終在毫秒以下。雖然在本研究規模下 Gurobi 速度極快，但 GRASP-LS 不依賴商業授權、易於嵌入 App 或 Edge 裝置，且具備可控的 anytime 性質（可隨時中斷並回傳目前最佳解）。
+
+\subsection{Stress-test Scenarios}\label{sec:stress}
+表 \ref{tab:stress} 彙整 $2\times2$ 壓力情境（預算 $\times$ 蛋白質目標，各 12 例）之結果。MILP 在全部 48 例皆可行；GRASP-LS 在 \textbf{46/48} 例可行（兩個無解皆落在「緊預算 $\times$ 高蛋白」此最嚴苛象限）。關鍵觀察：\textbf{真正推高 gap 的是「高蛋白目標」而非「緊預算」}——增肌目標下 gap 為 7.4\%（緊）／4.1\%（寬），維持目標下僅 1.2\%／1.4\%；緊預算反因可行域變小而求解更快（GRASP-LS 約 1.1--1.2\,s vs.\ 寬預算 2.7--2.9\,s）。即使在最嚴苛條件下，GRASP-LS 仍維持 $\le 7.4\%$ 的 optimality gap 與秒級求解，驗證其穩健性。
+\begin{table}[h]
+\centering\small
+\caption{$2\times2$ 壓力測試情境（各 12 例）：MILP/GRASP-LS 可行率、GRASP-LS 平均 optimality gap 與平均求解時間。}
+\label{tab:stress}
+\begin{tabular}{lcccc}
+\toprule
+情境（預算 $\times$ 蛋白） & MILP feas & GRASP-LS feas & avg gap & GRASP-LS 時間 \\
+\midrule
+緊 $\times$ 高蛋白 & 12/12 & 11/12 & 7.35\% & 1.10\,s \\
+緊 $\times$ 寬鬆   & 12/12 & 11/12 & 1.22\% & 1.24\,s \\
+寬 $\times$ 高蛋白 & 12/12 & 12/12 & 4.12\% & 2.85\,s \\
+寬 $\times$ 寬鬆   & 12/12 & 12/12 & 1.36\% & 2.72\,s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Comparison with an Uninformed Shopper}\label{sec:human}
+為估計模型相對於「現狀」（消費者自行盲選）的價值，本研究在真實 488 項商品上模擬一個\textbf{無輔助購買基準}：對每位使用者，於其預算內隨機抽取 2--4 件商品（不做任何營養最佳化）共 4000 次，統計達標情形（程式碼 \texttt{src/run\_extra\_experiments.py}）。結果見表 \ref{tab:human}：盲選\textbf{平均僅約 4\% 機率能同時滿足全部單餐限制}，蛋白質下限達成率僅約 6\%，鈉未超標比率約 63\%；相對地，GRASP-LS 對所有使用者皆 100\% 達標。值得強調的是，模型花費（平均約 NT\$109）與盲選平均花費（約 NT\$99）相當——模型\textbf{並非靠少買來省錢，而是在幾乎相同的花費下，把「整餐營養全達標」的機率從約 4\% 提升到 100\%}，同時省去使用者逐項心算營養與預算的時間成本。
+\begin{table}[h]
+\centering\small
+\caption{無輔助盲選基準 vs.\ 模型（每位使用者 4000 次隨機抽樣）。百分比為盲選滿足該限制的比率；模型價為 GRASP-LS 之達標餐花費。}
+\label{tab:human}
+\begin{tabular}{lccccc}
+\toprule
+使用者 & 全達標 & 蛋白達標 & 鈉未超標 & 盲選均價 & 模型價（達標） \\
+\midrule
+U1 男·減脂 & 5.2\% & 1.6\%  & 59.5\% & NT\$103.7 & NT\$108 \\
+U2 男·增肌 & 0.4\% & 1.3\%  & 47.7\% & NT\$121.6 & NT\$149 \\
+U3 男·維持 & 3.2\% & 7.1\%  & 71.7\% & NT\$89.5  & NT\$93  \\
+U4 女·減脂 & 9.8\% & 5.0\%  & 70.1\% & NT\$89.7  & NT\$94  \\
+U5 女·維持 & 3.7\% & 14.6\% & 74.2\% & NT\$80.6  & NT\$85  \\
+U6 女·增肌 & 1.9\% & 4.0\%  & 53.2\% & NT\$110.9 & NT\$124 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Sensitivity Analysis}
 圖 \ref{fig:beta} 顯示放寬預算為 NT\$220 後調整 $\beta$（蛋白質權重）之成本-蛋白質權衡。$\beta\le 1$ 時模型以 NT\$109.5 的組合恰好滿足蛋白質下限（45.6 g）；當 $\beta\ge 2$ 後，蛋白質的邊際效益越過更貴之高蛋白品的價格門檻，模型立即改組，蛋白質躍升至 92.8 g、花費升至 NT\$177；$\beta=8$ 時更達 119.5 g／NT\$201.5。此「階梯式跳變」反映 MILP 離散決策之本質。圖 \ref{fig:gamma} 顯示分層記憶之多樣性效應：將 $\gamma=0$ 之最優解注入為近期歷史後，$\gamma=0$ 時該餐 4 項全部再現；只要 $\gamma\ge 1$，分層懲罰即將其全數換掉（重複數降為 0），且因替代品同樣便宜，總花費不升反降（NT\$109.5 $\to$ NT\$103），顯示歷史懲罰能在「幾乎不犧牲成本」下顯著提升多樣性。
