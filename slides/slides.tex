@@ -31,16 +31,14 @@
 \begin{document}
 
 % custom title page: date on top, no institute, every line on a single row
-\begin{frame}[plain]
+% (no [plain] so the page number uses the same footline position as other slides)
+\begin{frame}
   \centering
-  \vspace{0.8cm}
-  {\normalsize\insertdate}\\[1.5cm]
+  \vspace{0.6cm}
+  {\normalsize\insertdate}\\[1.8cm]
   \resizebox{0.95\linewidth}{!}{\color{green!45!black}\bfseries\inserttitle}\\[12pt]
   {\normalsize\insertsubtitle}\\[1.3cm]
   {\footnotesize\insertauthor}
-  \vfill
-  \hbox to \linewidth{\hfill{\usebeamercolor[fg]{structure}\scriptsize\insertframenumber}\hspace*{3mm}}
-  \vspace*{1mm}
 \end{frame}
 
 % ============================================================
@@ -117,6 +115,8 @@ y_k \in \{0,1\}\;(\text{bundle } k)
 
 \begin{frame}{Tiered Memory: Penalizing Repetition (MLFQ-style)}
 \textbf{Inspired by MLFQ, recently recommended items receive stronger penalties, and older items gradually fade.}
+\medskip
+
 \begin{itemize}
   \item Tier weights $\boldsymbol\omega=(5,2.5,1,0.3)$ decay with recency; a re-picked item jumps back to the top tier
   \item $h_i$ = \textbf{same-item} penalty;\; $g_i$ = \textbf{same-category} penalty (e.g.\ all soy milks)
