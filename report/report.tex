@@ -1,5 +1,5 @@
 % !TEX program = xelatex
-\documentclass[11pt,a4paper]{article}
+\documentclass[a4paper]{article}
 \usepackage[a4paper,margin=2.2cm]{geometry}
 \usepackage{xeCJK}
 % Noto Serif TC is the same design as Source Han Serif TW (Noto Serif CJK);
@@ -12,6 +12,7 @@
 \usepackage{booktabs}
 \usepackage{caption}
 \usepackage[hidelinks]{hyperref}
+\usepackage{xurl}  % allow long URLs to break across lines (no margin overflow)
 \usepackage{array}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
@@ -26,11 +27,16 @@
 \setlength{\itemsep}{0pt}
 \renewcommand{\baselinestretch}{1.05}
 \captionsetup{font=small,skip=4pt}
+% --- unified list formatting (consistent bullets / spacing everywhere) ---
+\setlist[itemize]{leftmargin=1.6em, topsep=2pt, itemsep=2pt, parsep=0pt}
+\setlist[enumerate]{leftmargin=1.8em, topsep=2pt, itemsep=2pt, parsep=0pt}
+% consistent run-in paragraph headers (bold, small vertical lead)
+\titleformat{\paragraph}[runin]{\normalfont\bfseries}{}{0pt}{}
+\titlespacing*{\paragraph}{0pt}{6pt}{0.6em}
 
 \title{\vspace{-1.2cm}\textbf{便利商店最佳化餐食推薦模型}\\[2pt]
 \large 以 MILP 與 GRASP-LS 啟發式並用之決策架構}
-\author{Group 13\;|\;B13705005 宋宇倫、B13705011 陳芃慈、B13705020 陳鼎元、B13705029 蔡冠毅\\
-Department of Information Management, National Taiwan University}
+\author{Group 13: B13705005 宋宇倫、B13705011 陳芃慈、B13705020 陳鼎元、B13705029 蔡冠毅}
 \date{June 6, 2026}
 
 \begin{document}
@@ -38,28 +44,28 @@ Department of Information Management, National Taiwan University}
 \vspace{-0.5cm}
 
 \section{Introduction}
-便利商店是台灣大學生與上班族最高頻次的即時餐食取得管道：門市密度高、購買快速、商品標示完整。然而消費者在挑選時同時面臨成本、熱量、蛋白質、糖、鈉與飽足感等多重考量。若僅以「最低價」為依據，容易選到高糖高鈉商品；若僅追求「健康」，又可能讓單餐花費過高。實務上，便利商店亦頻繁推出「飯糰＋飲料」、「麵食＋蛋」等捆綁優惠，使得最終的支付成本依賴於是否使用組合，而非單品原價之直接加總。
+便利商店是台灣大學生與上班族取得即時餐食的高頻場域：門市密度高、購買流程快速，且商品營養標示相對完整。然而，消費者在挑選餐點時，往往需要同時權衡價格、熱量、蛋白質、糖、鈉與飽足感等多重因素。若僅以「最低價」為準則，容易選到高糖、高鈉的商品；若只追求「健康」，又可能使單餐花費過高。另一方面，便利商店也經常推出「飯糰＋飲料」、「麵食＋蛋」等組合優惠，使實際支付金額取決於是否啟用優惠組合，而非單品原價的簡單加總。
 
-本研究將上述決策抽象為一個含優惠組合、含個人化營養限制與含歷史多樣性懲罰的混合整數線性規劃（MILP）。決策者為使用者本人，其在指定情境模式（輕食／正餐／宵夜）、基本生理資訊（性別、年齡、身高、體重）、活動量與健康目標（維持／減脂／增肌）後，模型應自動推薦一組符合預算與營養底線、且具備多樣性的單餐組合。決策的核心 trade-off 為：
-\begin{itemize}[leftmargin=*]
+本研究將上述選餐問題建模為一個同時考量優惠組合、個人化營養限制與歷史多樣性懲罰的混合整數線性規劃（MILP）。使用者指定情境模式（輕食／正餐／宵夜）、基本生理資訊（性別、年齡、身高、體重）、活動量與健康目標（維持／減脂／增肌）後，模型會自動推薦一組符合預算、達到基本營養需求，且兼具多樣性的單餐組合。此決策問題的核心 trade-off 包括：
+\begin{itemize}
 \item 成本最小化 vs.\ 蛋白質最大化（高蛋白食物通常較貴）。
-\item 嚴格遵守營養區間 vs.\ 可行解之存在性（過嚴限制易導致無解）。
-\item 短期內推薦多樣性 vs.\ 客觀「最佳」商品的反覆勝出。
+\item 嚴格遵守營養區間 vs.\ 可行解之存在性（限制過嚴時，模型可能無法找到可行解）。
+\item 短期推薦多樣性 vs.\ 客觀「最佳」商品反覆被選中。
 \end{itemize}
-為兼顧上述目標，本研究於目標函數中加入軟性懲罰項，並引入歷史權重 $h_i$ 控制多樣性。此外，由於 MILP 在大型商品集（數百項）下的求解時間可能過長，本研究另自行設計一啟發式 \textbf{GRASP-LS}（Greedy Randomized Adaptive Search Procedure + Local Search），可在毫秒到秒級時間內回傳可行且近似最優的解，並以 Gurobi 為基準量化最佳化差距。
+為兼顧上述目標，本研究在目標函數中加入軟性懲罰項，並以歷史權重 $h_i$ 控制推薦多樣性。考量 MILP 在大型商品集（數百項商品）下可能面臨較長求解時間，本研究另設計啟發式演算法 \textbf{GRASP-LS}（Greedy Randomized Adaptive Search Procedure + Local Search），使系統能在毫秒至秒級時間內回傳可行且近似最優的解，並以 Gurobi 解作為基準量化 optimality gap。
 
 \section{Problem Description}
-考慮一位使用者欲在便利商店購買一餐。給定商品集合與其價格、營養標示，以及一組「雙品項／三品項優惠組合」，使用者輸入情境模式、生理資訊、健康目標與預算上限後，系統需決定：
-\begin{enumerate}[leftmargin=*,nosep]
+考慮一位使用者準備在便利商店購買一餐。給定商品集合、各商品價格與營養標示，以及一組「雙品項／三品項」優惠組合，當使用者輸入情境模式、生理資訊、健康目標與預算上限後，系統需決定：
+\begin{enumerate}
 \item 哪些商品以原價單品方式被選入；
-\item 哪些優惠組合應被啟用（將其包含的商品一併納入推薦）；
-\item 在預算與營養條件互相衝突時，應允許哪些限制以最小代價稍微鬆弛。
+\item 哪些優惠組合應被啟用，並將其包含的商品一併納入推薦；
+\item 當預算與營養條件相互衝突時，哪些軟性限制可在最小代價下適度鬆弛。
 \end{enumerate}
 
-模型輸出為一份單餐推薦清單與其總熱量、蛋白質、脂肪、碳水、糖、鈉等含量。模型須同時滿足：硬性限制（熱量區間、商品數量上限、預算、鈉硬上限、餐型結構——正餐恰一份主餐＋一蛋白質來源、每餐至多一杯飲料與一份甜點），與軟性限制（蛋白質下限、脂肪／碳水區間、糖／鈉上限）。為避免短期內反覆推薦相同商品，模型亦以分層歷史記憶對近期重複之商品與類別施加懲罰。
+模型輸出為一份單餐推薦清單，並列示其總熱量、蛋白質、脂肪、碳水、糖與鈉含量。模型須同時處理硬性限制（熱量區間、商品數量上限、預算、鈉硬上限、餐型結構——正餐恰含一份主餐與至少一個蛋白質來源、每餐至多一杯飲料與一份甜點）與軟性限制（蛋白質下限、脂肪／碳水區間、糖／鈉上限）。此外，為避免短期內反覆推薦相同商品，模型以分層歷史記憶對近期重複出現的商品與類別施加懲罰。
 
 \section{Parameter Preprocessing}\label{sec:pre}
-使用者輸入無法直接代入 MILP，因此須先依 Mifflin–St Jeor 公式換算為單餐參數。令年齡 $A$、身高 $H$、體重 $W$、活動係數 $AF \in \{1.2,1.55,1.725\}$、蛋白質係數 $PF \in \{1.1,1.6,1.8\}$，
+使用者輸入無法直接代入 MILP，因此本研究先依 Mifflin--St Jeor 公式將其轉換為單餐營養參數。令年齡 $A$、身高 $H$、體重 $W$、活動係數 $AF \in \{1.2,1.55,1.725\}$、蛋白質係數 $PF \in \{1.1,1.6,1.8\}$，
 \[
 \text{BMR} = \begin{cases}10W+6.25H-5A+5, & \text{男}\\10W+6.25H-5A-161, & \text{女}\end{cases},\quad
 \text{TDEE} = \text{BMR}\cdot AF,
@@ -76,11 +82,11 @@ Department of Information Management, National Taiwan University}
 再以情境比例 $\rho_m$ 將每日需求縮放為單餐：$\text{Cal}^{\min,\max}_m = \text{Target}_{\text{Cal}}\cdot \rho^{\min,\max}_m$，依此類推。本研究使用 $\rho^{\min,\max}$ 分別為輕食 $(0.15,0.25)$、正餐 $(0.30,0.45)$、宵夜型 $(0.05,0.15)$。
 
 \section{Mathematical Model}\label{sec:model}
-\textbf{Sets.} $I$ 為商品集合，$K$ 為優惠組合集合，$S_k\subseteq I$ 為組合 $k$ 包含之商品。每項商品依其全家官方分類被指派一個「餐位角色」$\mathrm{role}(i)\in\{\text{主餐},\text{飲料},\text{甜點},\text{配菜}\}$；令 $I^{\mathrm{main}}, I^{\mathrm{drink}}, I^{\mathrm{dess}}\subseteq I$ 分別為主餐、飲料、甜點集合。$I^{P}\subseteq I$ 為「真實蛋白質來源」，定義為每份蛋白質 $\ge 7$ g 且非甜點之商品（避免高糖甜點被誤當蛋白質湊數）。
+\paragraph{Sets.}$I$ 為商品集合，$K$ 為優惠組合集合，$S_k\subseteq I$ 為組合 $k$ 包含之商品。每項商品依全家官方分類指派一個「餐位角色」$\mathrm{role}(i)\in\{\text{主餐},\text{飲料},\text{甜點},\text{配菜}\}$；令 $I^{\mathrm{main}}, I^{\mathrm{drink}}, I^{\mathrm{dess}}\subseteq I$ 分別為主餐、飲料、甜點集合。$I^{P}\subseteq I$ 為「真實蛋白質來源」，定義為每份蛋白質 $\ge 7$ g 且非甜點之商品（避免高糖甜點被模型誤判為蛋白質來源）。
 
-\textbf{Parameters.} $c_i$ 單品原價；$cal_i,pro_i,fat_i,carb_i,sug_i,sod_i$ 為商品 $i$ 之營養含量；$c_k^{\text{promo}}$ 為優惠價；$B$ 為預算；$\text{Cal}^{\min,\max}_m, P^{\min}_m,$ \dots 為單餐限制（見 \S\ref{sec:pre}）；$N^{\max}_m$ 為商品數上限；$h_i$ 為歷史重複懲罰權重；$\alpha,\beta,\gamma$ 與 $\lambda_*$ 為目標函數權重。
+\paragraph{Parameters.}$c_i$ 單品原價；$cal_i,pro_i,fat_i,carb_i,sug_i,sod_i$ 為商品 $i$ 之營養含量；$c_k^{\text{promo}}$ 為優惠價；$B$ 為預算；$\text{Cal}^{\min,\max}_m, P^{\min}_m,$ \dots 為單餐限制（見 \S\ref{sec:pre}）；$N^{\max}_m$ 為商品數上限；$h_i$ 為歷史重複懲罰權重；$\alpha,\beta,\gamma$ 與 $\lambda_*$ 為目標函數權重。
 
-\textbf{Decision Variables.}
+\paragraph{Decision Variables.}\leavevmode
 \[
 a_i \in \{0,1\}\ \text{單品選取}, \quad
 y_k \in \{0,1\}\ \text{組合啟用}, \quad
@@ -88,16 +94,16 @@ x_i = a_i + \sum_{k:\,i\in S_k} y_k \quad\text{(輔助)}.
 \]
 鬆弛變數：$s_P, s^-_{F}, s^+_{F}, s^-_{C}, s^+_{C}, s_{\text{Sug}}, s_{\text{Sod}} \ge 0$。
 
-\textbf{Tiered Historical Penalty.} 為兼顧「長期不重複」與「久遠者可再現」，本研究將近期推薦之去重商品依其「新近排名」$r$ 放入一個仿作業系統多層回饋佇列（MLFQ）的分層結構。排名落入不同區間對應不同階層 $t(r)$，懲罰權重 $w(r)=\omega_{t(r)}$ 隨階層遞減：本研究取邊界 $r\le\{3,8,16,30\}$、權重 $\boldsymbol{\omega}=(5,\,2.5,\,1,\,0.3)$。最近被推之商品位於最上層（懲罰最重），每多推一餐未再被選即逐層淡出；若再次被推則跳回最上層（promotion）。保留至 $r\le 30$，更久者丟棄，等效於「極長但有限」的記憶窗。則
+\paragraph{Tiered Historical Penalty.}為兼顧「短期不重複」與「久遠商品可再次出現」，本研究將近期推薦過的去重商品，依其「新近排名」$r$ 放入一個仿作業系統多層回饋佇列（MLFQ）的分層結構。排名落入不同區間對應不同階層 $t(r)$，懲罰權重 $w(r)=\omega_{t(r)}$ 隨階層遞減：本研究取邊界 $r\le\{3,8,16,30\}$、權重 $\boldsymbol{\omega}=(5,\,2.5,\,1,\,0.3)$。最近被推薦的商品位於最上層（懲罰最重），若接下來數餐未再被選中，懲罰即逐層淡出；若再次被推薦，則回到最上層（promotion）。保留至 $r\le 30$，更久者丟棄，等效於「極長但有限」的記憶窗。則
 \[ h_i = \sum_{r} w(r)\,\mathbf{1}(i\text{ 出現於第 }r\text{ 近的紀錄}). \]
-此外定義「類別多樣性懲罰」$g_i = \sum_{r} w(r)\,\mathbf{1}\!\big(\mathrm{role}(\text{紀錄}_r)=\mathrm{role}(i)\big)$，使整個類別在剛被推薦後一起被壓低，避免模型僅以「換同類變體（如不同品牌豆漿）」假裝多樣。
+此外定義「類別多樣性懲罰」$g_i = \sum_{r} w(r)\,\mathbf{1}\!\big(\mathrm{role}(\text{紀錄}_r)=\mathrm{role}(i)\big)$，使剛被推薦過的類別整體受到抑制，避免模型僅透過「更換同類商品變體（如不同品牌豆漿）」製造表面上的多樣性。
 
-\textbf{Objective.}
+\paragraph{Objective.}\leavevmode
 \begin{align}
 \min\;& \alpha\!\left(\sum_{i\in I} c_i a_i + \sum_{k\in K} c_k^{\text{promo}} y_k\right) - \beta\sum_{i\in I} pro_i x_i + \gamma\sum_{i\in I} h_i x_i + \gamma_{\text{cat}}\sum_{i\in I} g_i x_i \notag\\
 & + \lambda_P s_P + \lambda^-_{F} s^-_{F} + \lambda^+_{F} s^+_{F} + \lambda^-_{C} s^-_{C} + \lambda^+_{C} s^+_{C} + \lambda_{\text{Sug}} s_{\text{Sug}} + \lambda_{\text{Sod}} s_{\text{Sod}}. \label{eq:obj}
 \end{align}
-\textbf{Constraints.}
+\paragraph{Constraints.}\leavevmode
 \begin{align}
 &a_i + \sum_{k:i\in S_k} y_k \le 1, \quad \forall i \in I, \tag{C1: 互斥}\\
 &\sum_{i\in I} c_i a_i + \sum_{k\in K} c_k^{\text{promo}} y_k \le B, \tag{C2: 預算}\\
@@ -111,20 +117,20 @@ x_i = a_i + \sum_{k:\,i\in S_k} y_k \quad\text{(輔助)}.
 &\sum_{i\in I^{\mathrm{drink}}} x_i \le 1, \quad \sum_{i\in I^{\mathrm{dess}}} x_i \le 1, \tag{C10: 餐型結構}\\
 &\sum_{i\in I^{\mathrm{main}}} x_i = 1, \quad \sum_{i\in I^{P}} x_i \ge 1, \quad \text{當 } m = \text{正餐模式}. \tag{C11: 主餐+蛋白}
 \end{align}
-其中 (C8b) 為鈉的硬性天花板（軟限制 (C8) 允許略超目標，但任何一餐絕不超過 $1.5\times$ 上限，避免推薦過鹹）；(C10) 限制每餐至多一杯飲料、一份甜點，(C11) 要求正餐恰含一份主餐並至少一個真實蛋白質來源，杜絕「以三件零食或兩瓶飲料湊一餐」「甜點當主菜」之不合理組合。
+其中，(C8b) 為鈉含量的硬性上限：雖然軟限制 (C8) 允許鈉含量略高於目標值，但任何一餐都不得超過 $1.5\times$ 上限，以避免推薦過鹹的組合；(C10) 限制每餐至多一杯飲料與一份甜點；(C11) 要求正餐恰含一份主餐，並至少包含一個真實蛋白質來源，以排除「以三件零食或兩瓶飲料湊成一餐」或「甜點當主菜」等不合理組合。
 
-\paragraph{權重的意義：各目標的相對重要性.} 目標函數的權重用來控制各項目標之間的\textbf{相對重要性}：$\alpha$ 對應成本、$\beta$ 對應蛋白質、$\gamma$（與 $\gamma_{\text{cat}}$）對應重複性，各 $\lambda_*$ 則對應各項軟限制被違反的程度。預設 $(\alpha,\beta)=(1,0.5)$ 設定成本與蛋白質之間的權衡幅度，$\lambda_P=6$、$\lambda_{\text{Sug}}=4$、$\lambda_{\text{Sod}}=0.15$ 則決定蛋白質不足、糖與鈉超標各自的懲罰強度。如此把「健康 vs.\ 成本」的取捨參數化，使用者可透過 App 的 slider 直接調整偏好（見 \S\ref{sec:exp} 之敏感度分析）。
+\paragraph{權重的意義：各目標的相對重要性.} 目標函數中的權重用來控制各項目標的\textbf{相對重要性}：$\alpha$ 對應成本、$\beta$ 對應蛋白質、$\gamma$（與 $\gamma_{\text{cat}}$）對應重複性，各 $\lambda_*$ 則對應各項軟限制被違反的程度。預設 $(\alpha,\beta)=(1,0.5)$ 設定成本與蛋白質之間的權衡幅度，$\lambda_P=6$、$\lambda_{\text{Sug}}=4$、$\lambda_{\text{Sod}}=0.15$ 則決定蛋白質不足、糖與鈉超標各自的懲罰強度。如此可將「健康 vs.\ 成本」的取捨參數化，使用者可透過 App slider 直接調整偏好（見 \S\ref{sec:exp} 之敏感度分析）。
 
 \section{Proposed Algorithm: GRASP-LS}\label{sec:alg}
-為避免大規模情境下單純依賴商業 solver 之長時間求解，本研究自行設計一啟發式 \textbf{GRASP-LS}。其結合「貪婪隨機構造（GRC）」與「鄰域局部搜尋（LS）」，並以多重啟動（multi-start）強化全域探索能力。整體流程見圖 \ref{fig:flow} 與演算法 \ref{alg:grasp}。
+為降低大規模情境下單純依賴商業 solver 的求解負擔，本研究設計啟發式演算法 \textbf{GRASP-LS}。此方法結合「貪婪隨機構造（GRC）」與「鄰域局部搜尋（LS）」，並透過多重啟動（multi-start）強化全域探索能力。整體流程見圖 \ref{fig:flow} 與演算法 \ref{alg:grasp}。
 
 \paragraph{核心想法.}
-\begin{enumerate}[leftmargin=*,nosep]
-\item \textbf{綜合優先分數} $\sigma(p)$（式 \ref{eq:score}）同時量化每項商品的蛋白質貢獻、價格負擔、營養適配度、類別獎勵與歷史懲罰，使後續貪婪步驟具方向性。
-\item \textbf{RCL (Restricted Candidate List)} 機制以參數 $\alpha_{\text{rcl}}\in[0.1,0.4]$ 控制隨機性：$\alpha_{\text{rcl}}\to 0$ 偏向純貪婪，$\alpha_{\text{rcl}}\to 1$ 偏向純隨機；每次 restart 隨機抽取，獲得不同起始解。
-\item \textbf{組合作為「超商品」.} 第一步以正比於組合分數的機率嘗試納入一個優惠組合，使啟發式能主動發現「優惠－單品互斥」的決策邊界。
-\item \textbf{結構感知建構.} 建構階段先放入恰好一份主餐，並於加入後續候選時即時遵守「至多一杯飲料、至多一份甜點」之餐型限制（C10--C11），使初始解直接結構可行，毋須仰賴局部搜尋事後修補。
-\item \textbf{局部搜尋} 使用 1-1 swap、1-0 drop、0-1 add 與 combo-swap 等多種移動，採用「首改善（first-improvement）」策略避免局部停滯。
+\begin{enumerate}
+\item \textbf{綜合優先分數} $\sigma(p)$（式 \ref{eq:score}）同時量化每項商品的蛋白質貢獻、價格負擔、營養適配度、類別獎勵與歷史懲罰，使後續貪婪建構更具方向性。
+\item \textbf{RCL (Restricted Candidate List)} 機制以參數 $\alpha_{\text{rcl}}\in[0.1,0.4]$ 控制隨機性：$\alpha_{\text{rcl}}\to 0$ 偏向純貪婪，$\alpha_{\text{rcl}}\to 1$ 偏向純隨機；每次 restart 皆隨機抽取候選項，以產生不同的起始解。
+\item \textbf{組合作為「超商品」.} 第一步以正比於組合分數的機率嘗試納入一個優惠組合，使啟發式能主動探索「優惠組合－單品選取互斥」的決策邊界。
+\item \textbf{結構感知建構.} 建構階段先放入恰好一份主餐，並於加入後續候選時即時遵守「至多一杯飲料、至多一份甜點」之餐型限制（C10--C11），使初始解在結構上即具可行性，降低事後仰賴局部搜尋修補的需求。
+\item \textbf{局部搜尋} 使用 1-1 swap、1-0 drop、0-1 add 與 combo-swap 等多種移動，採用「首改善（first-improvement）」策略加速搜尋並降低停滯風險。
 \item \textbf{多重啟動} 對 $K_{\text{restart}}=25$ 個不同種子分別執行 GRC+LS，蒐集所有 hard-feasible 解形成解池，回傳目標函數值最小者（或依下述 $\epsilon$-最佳取樣回傳一個多樣化解）。
 \end{enumerate}
 \begin{equation}\label{eq:score}
@@ -154,8 +160,8 @@ x_i = a_i + \sum_{k:\,i\in S_k} y_k \quad\text{(輔助)}.
   \draw[->] (ls) -- (up);
   \draw[->] (up) -- (dec);
   \draw[->] (dec) -- node[right]{no} (out);
-  \draw[->] (dec.east) -- ++(2.3cm,0) |- (grc.east);
-  \node[align=left] at ($(dec.east)+(2.55cm,0.95cm)$) {yes\\($\times25$)};
+  \draw[->] (dec.east) -| ([xshift=6mm]grc.east) |- (grc.east);
+  \node[anchor=west, align=left] at ([xshift=8mm]ls.east) {yes\\($\times25$)};
 \end{tikzpicture}}
 \caption{GRASP-LS 整體流程：多重啟動下，每輪以 GRC 建構結構可行的初始解，經局部搜尋改良後更新解池；重複 $K_{\text{restart}}=25$ 次後回傳最佳解（部署時改自 $\epsilon$-最佳解池取樣以增多樣性，緊預算無解時退回 MILP）。}
 \label{fig:flow}
@@ -180,7 +186,7 @@ x_i = a_i + \sum_{k:\,i\in S_k} y_k \quad\text{(輔助)}.
 \end{algorithmic}
 \end{algorithm}
 
-\paragraph{時間複雜度.} GRC 每步檢視 $O(|I|)$ 候選並計算貢獻，最多取 $N^{\max}_m$ 項，故 $O(N^{\max}_m\cdot |I|)$。LS 每輪 1-1 swap 約為 $O(N^{\max}_m\cdot |I|)$；最壞情況下每輪都會改善並進入下一輪。實務上 LS 經過 $T\le 10$ 輪即收斂，總時間為 $O(K_{\text{restart}}\cdot T\cdot N^{\max}_m\cdot |I|)$。
+\paragraph{時間複雜度.} GRC 每一步檢視 $O(|I|)$ 候選並計算貢獻，最多取 $N^{\max}_m$ 項，故 $O(N^{\max}_m\cdot |I|)$。LS 每輪 1-1 swap 約為 $O(N^{\max}_m\cdot |I|)$；最壞情況下每輪都會改善並進入下一輪。實務上 LS 經過 $T\le 10$ 輪即收斂，總時間為 $O(K_{\text{restart}}\cdot T\cdot N^{\max}_m\cdot |I|)$。
 
 \begin{algorithm}[h]
 \caption{Greedy Randomized Construction (GRC) sub-procedure}
@@ -224,37 +230,37 @@ x_i = a_i + \sum_{k:\,i\in S_k} y_k \quad\text{(輔助)}.
 \end{algorithm}
 
 \paragraph{多樣化部署：$\epsilon$-最佳取樣與後備求解.}\label{par:eps}
-單純回傳唯一最佳解會使連續查詢得到幾乎相同的餐點（MILP 為確定性，僅靠歷史懲罰輪替）。本研究因此將「多樣性」形式化為對 $\epsilon$-最佳解集合 $\mathcal{S}_\epsilon=\{s : z(s)\le z^*+\epsilon\}$ 之均勻取樣：每次查詢自解池中隨機抽一個目標值在最佳值 $\epsilon$ 元以內的解回傳。$\epsilon$ 直接控制「多樣性 vs.\ 最佳性」之 trade-off（量化見 \S\ref{sec:exp} 之「多樣性的代價」）。部署時預設以 GRASP-LS（$\epsilon=8$）提供多樣化推薦；若於極緊預算下 GRASP 偶未找到可行解，則退回 MILP 精確求解作為後備，確保有解時必有輸出。
+若系統每次都回傳唯一最佳解，連續查詢容易得到幾乎相同的餐點（MILP 為確定性，僅靠歷史懲罰輪替）。本研究因此將「多樣性」形式化為對 $\epsilon$-最佳解集合 $\mathcal{S}_\epsilon=\{s : z(s)\le z^*+\epsilon\}$ 之均勻取樣：每次查詢皆自解池中，隨機抽取一個目標值落在最佳值 $\epsilon$ 元以內的解作為推薦結果。$\epsilon$ 直接控制「多樣性 vs.\ 最佳性」之 trade-off（量化見 \S\ref{sec:exp} 之「多樣性的代價」）。部署時預設以 GRASP-LS（$\epsilon=8$）提供多樣化推薦；若於極緊預算下 GRASP 偶未找到可行解，則退回 MILP 精確求解作為後備，確保只要存在可行解，系統即可回傳推薦結果。
 
 \section{Data Collection and Generation}\label{sec:data}
-\textbf{Real-world data scraping (兩階段).}
+\paragraph{Real-world data scraping（兩階段）.}
 
-\textit{階段一：營養標示.} 本研究透過全家便利商店「食在購安心」食品履歷查詢 API（\texttt{foodsafety.family.com.tw/Web\_FFD\_2022/ws/QueryFsProductListByFilter} 與 \texttt{QueryFsProductByItem}）爬取 \textbf{581 項真實商品}的官方營養標示，覆蓋 22 個原始分類。所有商品之熱量、蛋白質、脂肪、碳水、糖、鈉皆為來自官方食品履歷的逐包標示，並以「本包裝含 $n$ 份」自動換算為每包總量。scraper 程式碼見 \texttt{src/scrape\_familymart.py}。
+\textit{階段一：營養標示.} 本研究透過全家便利商店「食在購安心」食品履歷查詢 API（\url{foodsafety.family.com.tw/Web_FFD_2022/ws/QueryFsProductListByFilter} 與 \texttt{QueryFsProductByItem}）爬取 \textbf{581 項真實商品}的官方營養標示，覆蓋 22 個原始分類。所有商品的熱量、蛋白質、脂肪、碳水、糖與鈉資料皆來自官方食品履歷的逐包標示，並以「本包裝含 $n$ 份」自動換算為每包總量。scraper 程式碼見 \texttt{src/scrape\_familymart.py}。
 
-\textit{階段二：價格.} 食品履歷 API 不提供價格。本研究先解析「全家鮮食組合餐促銷頁」（\texttt{nevent.family.com.tw/freshfood/}）之 \textbf{49/59/69/79/99/109 元} 六個分級，以 n-gram fuzzy 字串相似度對應，命中 \textbf{124 項鮮食}（飯糰、便當、三明治、義大利麵、麵包）之真實店內價。其餘非鮮食品項（乳製品、飲料、零食、冷凍食品等）全家並無公開的「單品店內價」API——「全家行動購」電商目錄雖可爬取（\texttt{fts-api.91app.com}），但其中 78\% 為整箱／多入裝（價格中位數 NT\$149），屬「整箱價」而非「單品店價」，直接採用會嚴重扭曲單餐定價（如一碗牛肉麵被標為 NT\$249）。本研究因此對其餘 \textbf{457 項} 採「市售行情校正價」：依分類建立合理的單份店價基準（乳製品約 28、單瓶豆漿約 28、關東煮每串約 20、舒肥雞胸約 59 等），並對標有容量之飲料按毫升微調。最終價格組成為 124 項鮮食實價＋457 項市售校正價（程式碼 \texttt{src/scrape\_freshfood\_prices.py}、\texttt{src/curate\_prices.py}）。我們明確標註：鮮食為真實分級價，其餘為依市場行情之合理估計。
+\textit{階段二：價格.} 食品履歷 API 不提供價格。本研究先解析「全家鮮食組合餐促銷頁」（\url{nevent.family.com.tw/freshfood/}）之 \textbf{49/59/69/79/99/109 元} 六個分級，以 n-gram fuzzy 字串相似度對應，命中 \textbf{124 項鮮食}（飯糰、便當、三明治、義大利麵、麵包）之真實店內價。其餘非鮮食品項（乳製品、飲料、零食、冷凍食品等）全家並無公開的「單品店內價」API——「全家行動購」電商目錄雖可爬取（\texttt{fts-api.91app.com}），但其中 78\% 為整箱／多入裝（價格中位數 NT\$149），屬於「整箱價」而非「單品店價」，若直接採用將嚴重扭曲單餐定價（如一碗牛肉麵被標為 NT\$249）。本研究因此對其餘 \textbf{457 項} 採「市售行情校正價」：依分類建立合理的單份店價基準（乳製品約 28、單瓶豆漿約 28、關東煮每串約 20、舒肥雞胸約 59 等），並對標有容量之飲料按毫升微調。最終價格組成為 124 項鮮食實價＋457 項市售校正價（程式碼 \texttt{src/scrape\_freshfood\_prices.py}、\texttt{src/curate\_prices.py}）。因此，本研究明確標註資料來源：鮮食採真實分級價，其餘商品則採依市場行情校正之合理估計價。
 
-\textit{階段三：份量正規化、家庭份過濾與角色標記.} 許多 SKU 為多份包裝（1857 ml 豆漿＝4 份、24 入禮盒等），其營養與價格為「整包」數值而非一餐所含；本研究將所有數值除以份數正規化為「每份」，並對每份價格設下限 NT\$18，避免被低估的整包均價產生「一份僅 1 元」之假性最便宜品而霸佔推薦。家庭份（$\ge 3$ 份，如 1857 ml 大瓶、936 ml 牛乳）並非合理的單餐購買，故自品池移除，581 項過濾後為 \textbf{488 項}。此外，原始 CSV 以關鍵字推得的 \texttt{is\_main}/\texttt{is\_protein} 旗標雜訊偏高（蛋糕、餅乾曾被標為蛋白質來源），本研究改以官方分類重新指派餐位角色（主餐／飲料／甜點／配菜），並將糖 $\ge 10$ g 之甜麵包（菠蘿、拔絲等）改判為甜點，使「真實蛋白質來源」與「主餐」之定義貼近實況（程式碼 \texttt{src/data\_loader.py}）。
+\textit{階段三：份量正規化、家庭份過濾與角色標記.} 許多 SKU 為多份包裝（1857 ml 豆漿＝4 份、24 入禮盒等），其營養與價格為「整包」數值而非一餐所含；本研究將所有數值除以份數正規化為「每份」，並對每份價格設下限 NT\$18，避免因整包均價被低估而產生「一份僅 1 元」的假性低價商品，進而不合理地主導推薦結果。家庭份（$\ge 3$ 份，如 1857 ml 大瓶、936 ml 牛乳）並非合理的單餐購買，因此自商品池中移除，581 項過濾後為 \textbf{488 項}。此外，原始 CSV 以關鍵字推得的 \texttt{is\_main}/\texttt{is\_protein} 旗標雜訊偏高（蛋糕、餅乾曾被標為蛋白質來源），本研究改以官方分類重新指派餐位角色（主餐／飲料／甜點／配菜），並將糖 $\ge 10$ g 之甜麵包（菠蘿、拔絲等）改判為甜點，使「真實蛋白質來源」與「主餐」的定義更貼近實際消費情境（程式碼 \texttt{src/data\_loader.py}）。
 
-\textit{組合優惠.} 共 55 組由 main + drink、main + side、main + side + drink 三類規則合成的優惠組合，折扣率設為 17\%--20\%；這部分屬於 mock 設定，已在報告中明確標示。
+\textit{組合優惠.} 共 55 組由 main + drink、main + side、main + side + drink 三類規則合成的優惠組合，折扣率設為 17\%--20\%；此部分屬 mock 設定，本研究已於報告中明確標示。
 
-\textbf{Real-world user profiles.} 為展示模型在不同使用者下的差異，本研究設計 6 個典型 profile（性別 × 健康目標 × 活動量），各搭配 3 種情境模式，共 18 個 real-world 例題（見表 \ref{tab:real}）。
+\paragraph{Real-world user profiles.}為展示模型在不同使用者條件下的推薦差異，本研究設計 6 個典型 profile（性別 × 健康目標 × 活動量），各搭配 3 種情境模式，共 18 個 real-world 例題（見表 \ref{tab:real}）。
 
-\textbf{Random instances.} 為驗證可擴展性，本研究依下列因子建立隨機例題：
+\paragraph{Random instances.}為驗證可擴展性，本研究依下列因子建立隨機例題：
 商品數 $|I|\in\{30,50,80,120,200,300\}$；組合數 $|K|\in\{8,15,25,35,60,90\}$；各規模 5 個隨機種子，共 30 個隨機例題。商品屬性分布如下：
 $cal\sim \mathcal{U}(180,650)$（主食）或 $\mathcal{U}(15,320)$（非主食），$pro\sim \mathcal{U}(5,30)$（含蛋白質）或 $\mathcal{U}(0,10)$，$sod\sim \mathcal{U}(0,1400)$；
 組合大小 $\in\{2,3\}$，折扣率 $\sim \mathcal{U}(0.80,0.92)$ 之原價。
 
-\textbf{壓力測試情境（factorial scenario design）.} 上述隨機例題僅改變「規模」此一因子。為進一步檢驗 GRASP-LS 在極端條件下的穩健性，本研究另設計一組 $2\times2$ 因子情境：因子一為\textbf{預算水準}（緊 $B=90$／寬 $B=220$），因子二為\textbf{蛋白質目標}（高：增肌目標／寬鬆：維持目標）；於 3 種規模（80／120／200 品項）$\times$ 4 個種子下交叉，共 $4\times3\times4=48$ 個受測例題，各情境同時以 MILP 與 GRASP-LS 求解（程式碼 \texttt{src/run\_extra\_experiments.py}）。結果見 \S\ref{sec:stress}。
+\paragraph{壓力測試情境（factorial scenario design）.}上述隨機例題主要改變「規模」此一因子。為進一步檢驗 GRASP-LS 在極端條件下的穩健性，本研究另設計一組 $2\times2$ 因子情境：因子一為\textbf{預算水準}（緊 $B=90$／寬 $B=220$），因子二為\textbf{蛋白質目標}（高：增肌目標／寬鬆：維持目標）；於 3 種規模（80／120／200 品項）$\times$ 4 個種子下交叉，共 $4\times3\times4=48$ 個受測例題，各情境同時以 MILP 與 GRASP-LS 求解（程式碼 \texttt{src/run\_extra\_experiments.py}）。結果見 \S\ref{sec:stress}。
 
 \section{Performance Evaluation}\label{sec:exp}
 本節以三種解法相互比較：
 （i）\textbf{Gurobi MILP}（精確解，作為上下界基準）；
 （ii）\textbf{GRASP-LS}（本研究提出之啟發式）；
-（iii）\textbf{Greedy baseline}（最簡單之「蛋白質／價格比」貪婪法，做為「very simple heuristic」基準）。
-權重設定為 $\alpha=1, \beta=0.5, \gamma=2, \gamma_{\text{cat}}=8, \lambda_P=6, \lambda^\pm_F = 2/3, \lambda^\pm_C = 1/1.5, \lambda_{\text{Sug}}=4, \lambda_{\text{Sod}}=0.15$。基準表（MILP/GRASP/Greedy 比較）皆以空歷史求解，故 $\gamma,\gamma_{\text{cat}}$ 不影響最佳值；多樣性效果另於 \S\ref{sec:exp} 之敏感度與「多樣性的代價」中專門評估。
+（iii）\textbf{Greedy baseline}（最簡單之「蛋白質／價格比」貪婪法，作為「very simple heuristic」基準）。
+權重設定為 $\alpha=1, \beta=0.5, \gamma=2, \gamma_{\text{cat}}=8, \lambda_P=6, \lambda^\pm_F = 2/3, \lambda^\pm_C = 1/1.5, \lambda_{\text{Sug}}=4, \lambda_{\text{Sod}}=0.15$。基準表（MILP/GRASP/Greedy 比較）皆以空歷史求解，故 $\gamma,\gamma_{\text{cat}}$ 不影響最佳值；多樣性效果另於 \S\ref{sec:exp} 之敏感度與「多樣性的代價」中另行評估。
 
 \subsection{Real-world Instances}
-表 \ref{tab:real} 為六個真實使用者 × 三種情境的結果。MILP 於 18 個真實例題全數求得全域最佳解；GRASP-LS 亦 \textbf{100\% hard-feasible}，平均 optimality gap 為 \textbf{7.1\%}，其中 12/18 例題 gap 為 0\%。值得注意的是，所有非零 gap 均出現於「正餐」情境——加入「恰一份主餐 + 餐型結構」(C10--C11) 後，正餐之可行組合較窄，GRASP 之 1-1 swap 鄰域偶會卡在次優（最差 U5 女·維持·正餐 40.5\%）；輕食與宵夜型則全部 0\%。相對地，\textbf{Greedy baseline 在新的結構與鈉硬上限下 0\% 可行}：它以「蛋白質／價格比」貪取小型高蛋白品，必然缺主餐（違反 C11）且鈉常突破 $1.5\times$ 硬上限（違反 C8b），凸顯單一指標排序無法處理多重結構限制（見圖 \ref{fig:feas}）。
+表 \ref{tab:real} 為六個真實使用者 × 三種情境的結果。MILP 在 18 個真實例題中皆求得全域最佳解；GRASP-LS 亦達到 \textbf{100\% hard-feasible}，平均 optimality gap 為 \textbf{7.1\%}，其中 12/18 例題 gap 為 0\%。值得注意的是，非零 gap 全部集中於「正餐」情境——加入「恰一份主餐 + 餐型結構」(C10--C11) 後，正餐之可行組合較窄，GRASP 之 1-1 swap 鄰域偶會卡在次優（最差 U5 女·維持·正餐 40.5\%）；輕食與宵夜型則全部 0\%。相對地，\textbf{Greedy baseline 在新的結構與鈉硬上限下 0\% 可行}：它以「蛋白質／價格比」貪取小型高蛋白品，必然缺主餐（違反 C11）且鈉常突破 $1.5\times$ 硬上限（違反 C8b），凸顯單一指標排序難以處理多重結構限制（見圖 \ref{fig:feas}）。
 
 \begin{table}[h]
 \centering\scriptsize
@@ -263,12 +269,12 @@ $cal\sim \mathcal{U}(180,650)$（主食）或 $\mathcal{U}(15,320)$（非主食�
 \input{../results/tables/real_full.tex}
 \end{table}
 
-圖 \ref{fig:break} 以 U1（男·減脂·正餐）為例對比三種解法的營養與成本：MILP／GRASP-LS 皆產出結構完整、各項達標之一餐；Greedy 因只看「蛋白質／價格比」而缺主餐、且鈉破硬上限，hard-infeasible。
+圖 \ref{fig:break} 以 U1（男·減脂·正餐）為例，比較三種解法在營養與成本上的表現：MILP／GRASP-LS 皆產出結構完整且各項指標達標的一餐；Greedy 因只看「蛋白質／價格比」而缺主餐、且鈉破硬上限，hard-infeasible。
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.95\textwidth]{../results/figs/fig_real_breakdown.png}
-\caption{U1 男·減脂·正餐情境（488 項真實全家商品）下三種解法之熱量、蛋白質、鈉與成本對比（虛線為對應限制）。MILP 解為結構完整的一餐：\textbf{小菠蘿麵包（主餐）＋蜜汁豬肉乾（配菜）＋無加糖濃豆漿（飲料）＋綜合水果軟糖（甜點）}，總價 NT\$110、693 kcal、45.6 g 蛋白質、667 mg 鈉，全部達標；GRASP-LS 取另一近似最優之結構餐（NT\$108）。Greedy 為榨取「蛋白質／價格比」挑出雞腿排+豬耳絲+豆漿，\textbf{缺主餐}（違反 C11）、鈉量 2168 mg \textbf{突破 $1.5\times$ 硬上限}（違反 C8b），\textbf{hard-infeasible}。}
+\caption{U1 男·減脂·正餐情境（488 項真實全家商品）下三種解法之熱量、蛋白質、鈉與成本對比（虛線為對應限制）。MILP 解為結構完整的一餐：\textbf{小菠蘿麵包（主餐）＋蜜汁豬肉乾（配菜）＋無加糖濃豆漿（飲料）＋綜合水果軟糖（甜點）}，總價 NT\$110、693 kcal、45.6 g 蛋白質、667 mg 鈉，皆達標；GRASP-LS 取另一近似最優之結構餐（NT\$108）。Greedy 為榨取「蛋白質／價格比」挑出雞腿排+豬耳絲+豆漿，\textbf{缺主餐}（違反 C11）、鈉量 2168 mg \textbf{突破 $1.5\times$ 硬上限}（違反 C8b），\textbf{hard-infeasible}。}
 \label{fig:break}
 \end{figure}
 
@@ -292,7 +298,7 @@ $cal\sim \mathcal{U}(180,650)$（主食）或 $\mathcal{U}(15,320)$（非主食�
 \label{tab:rand}
 \input{../results/tables/random_summary.tex}
 \end{table}
-MILP 在所有規模下均求得最佳解；GRASP-LS 平均 optimality gap 為 \textbf{4.9\%}，hard-feasible 比率 93\%（28/30；兩個無解出現於 $|I|=30,50$ 之緊預算例題——結構限制下貪婪建構偶難在低預算內湊齊「恰一主餐 + 蛋白」之高熱量組合，此時部署版會退回 MILP 後備）。需註明：表 \ref{tab:rand} 之分規模 gap 係各解法於\textbf{各自可行子集}上之平均（分母不同），故 $|I|=30,50$ 因有種子對 GRASP-LS 不可行而出現負值假象；以逐例（per-instance）對齊計算之平均 gap 仍為 \textbf{4.9\%}。相對地，Greedy baseline 在加入餐型結構 (C10--C11) 與鈉硬上限 (C8b) 後幾乎全面失效：多數規模下 \textbf{0\% 可行}，凸顯單一比值排序無法滿足多重結構限制。
+MILP 在所有規模下均能求得最佳解；GRASP-LS 平均 optimality gap 為 \textbf{4.9\%}，hard-feasible 比率 93\%（28/30；兩個無解出現於 $|I|=30,50$ 之緊預算例題——在結構限制下，貪婪建構偶爾難以於低預算內湊齊「恰一主餐 + 蛋白」且熱量達標的組合，此時部署版會退回 MILP 後備）。需要說明的是：表 \ref{tab:rand} 之分規模 gap 係各解法於\textbf{各自可行子集}上之平均（分母不同），因此 $|I|=30,50$ 因部分種子對 GRASP-LS 不可行而出現負值假象；以逐例（per-instance）對齊計算之平均 gap 仍為 \textbf{4.9\%}。相對地，Greedy baseline 在加入餐型結構 (C10--C11) 與鈉硬上限 (C8b) 後幾乎全面失效：多數規模下 \textbf{0\% 可行}，凸顯單一比值排序不足以滿足多重結構限制。
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.7\textwidth]{../results/figs/fig_gap_by_size.png}
@@ -300,10 +306,10 @@ MILP 在所有規模下均求得最佳解；GRASP-LS 平均 optimality gap 為 \
 \label{fig:gap}
 \end{figure}
 
-圖 \ref{fig:rt} 顯示三種解法的 runtime 隨商品數成長之情形。MILP 從 6 ms（$|I|=30$）增長至 227 ms（$|I|=300$）；GRASP-LS 從 17 ms 增長至約 4.2 秒；Greedy 始終在毫秒以下。雖然在本研究規模下 Gurobi 速度極快，但 GRASP-LS 不依賴商業授權、易於嵌入 App 或 Edge 裝置，且具備可控的 anytime 性質（可隨時中斷並回傳目前最佳解）。
+圖 \ref{fig:rt} 顯示三種解法的 runtime 隨商品數成長之情形。MILP 從 6 ms（$|I|=30$）增長至 227 ms（$|I|=300$）；GRASP-LS 從 17 ms 增長至約 4.2 秒；Greedy 始終在毫秒以下。雖然在本研究的測試規模下 Gurobi 求解速度極快，但 GRASP-LS 不依賴商業授權，較易嵌入 App 或 Edge 裝置，且具備可控的 anytime 性質（可隨時中斷並回傳目前最佳解）。
 
 \subsection{Stress-test Scenarios}\label{sec:stress}
-表 \ref{tab:stress} 彙整 $2\times2$ 壓力情境（預算 $\times$ 蛋白質目標，各 12 例）之結果。MILP 在全部 48 例皆可行；GRASP-LS 在 \textbf{46/48} 例可行（兩個無解皆落在「緊預算 $\times$ 高蛋白」此最嚴苛象限）。關鍵觀察：\textbf{真正推高 gap 的是「高蛋白目標」而非「緊預算」}——增肌目標下 gap 為 7.4\%（緊）／4.1\%（寬），維持目標下僅 1.2\%／1.4\%；緊預算反因可行域變小而求解更快（GRASP-LS 約 1.1--1.2\,s vs.\ 寬預算 2.7--2.9\,s）。即使在最嚴苛條件下，GRASP-LS 仍維持 $\le 7.4\%$ 的 optimality gap 與秒級求解，驗證其穩健性。
+表 \ref{tab:stress} 彙整 $2\times2$ 壓力情境（預算 $\times$ 蛋白質目標，各 12 例）之結果。MILP 在全部 48 例中皆可行；GRASP-LS 在 \textbf{46/48} 例中找到可行解。兩個未找到可行解的案例皆落在「緊預算」條件下，分別出現於高蛋白與寬鬆蛋白目標。關鍵觀察：\textbf{真正推高 gap 的主要因素是「高蛋白目標」，而非單純的「緊預算」}——增肌目標下 gap 為 7.4\%（緊）／4.1\%（寬），維持目標下僅 1.2\%／1.4\%；緊預算情境反而因可行域較小而求解更快（GRASP-LS 約 1.1--1.2\,s vs.\ 寬預算 2.7--2.9\,s）。即使在最嚴苛條件下，GRASP-LS 仍維持 $\le 7.4\%$ 的 optimality gap 與秒級求解，驗證其穩健性。
 \begin{table}[h]
 \centering\small
 \caption{$2\times2$ 壓力測試情境（各 12 例）：MILP/GRASP-LS 可行率、GRASP-LS 平均 optimality gap 與平均求解時間。}
@@ -321,7 +327,7 @@ MILP 在所有規模下均求得最佳解；GRASP-LS 平均 optimality gap 為 \
 \end{table}
 
 \subsection{Comparison with an Uninformed Shopper}\label{sec:human}
-為估計模型相對於「現狀」（消費者自行盲選）的價值，本研究在真實 488 項商品上模擬一個\textbf{無輔助購買基準}：對每位使用者，於其預算內隨機抽取 2--4 件商品（不做任何營養最佳化）共 4000 次，統計達標情形（程式碼 \texttt{src/run\_extra\_experiments.py}）。結果見表 \ref{tab:human}：盲選\textbf{平均僅約 4\% 機率能同時滿足全部單餐限制}，蛋白質下限達成率僅約 6\%，鈉未超標比率約 63\%；相對地，GRASP-LS 對所有使用者皆 100\% 達標。值得強調的是，模型花費（平均約 NT\$109）與盲選平均花費（約 NT\$99）相當——模型\textbf{並非靠少買來省錢，而是在幾乎相同的花費下，把「整餐營養全達標」的機率從約 4\% 提升到 100\%}，同時省去使用者逐項心算營養與預算的時間成本。
+為估計模型相較於「現狀」（消費者自行盲選）的價值，本研究在真實 488 項商品上模擬一個\textbf{無輔助購買基準}：對每位使用者，於其預算內隨機抽取 2--4 件商品（不做任何營養最佳化）共 4000 次，統計達標情形（程式碼 \texttt{src/run\_extra\_experiments.py}）。結果見表 \ref{tab:human}：盲選\textbf{平均僅約 4\% 機率能同時滿足全部單餐限制}，蛋白質下限達成率僅約 6\%，鈉未超標比率約 63\%；相對地，GRASP-LS 對所有使用者皆 100\% 達標。值得強調的是，模型花費（平均約 NT\$109）與盲選平均花費（約 NT\$99）相當——模型\textbf{並非透過少買來降低支出，而是在幾乎相同的花費下，將「整餐營養全達標」的機率由約 4\% 提升至 100\%}，同時省去使用者逐項心算營養與預算的時間成本。
 \begin{table}[h]
 \centering\small
 \caption{無輔助盲選基準 vs.\ 模型（每位使用者 4000 次隨機抽樣）。百分比為盲選滿足該限制的比率；模型價為 GRASP-LS 之達標餐花費。}
@@ -341,7 +347,7 @@ U6 女·增肌 & 1.9\% & 4.0\%  & 53.2\% & NT\$110.9 & NT\$124 \\
 \end{table}
 
 \subsection{Sensitivity Analysis}
-圖 \ref{fig:beta} 顯示放寬預算為 NT\$220 後調整 $\beta$（蛋白質權重）之成本-蛋白質權衡。$\beta\le 1$ 時模型以 NT\$109.5 的組合恰好滿足蛋白質下限（45.6 g）；當 $\beta\ge 2$ 後，蛋白質的邊際效益越過更貴之高蛋白品的價格門檻，模型立即改組，蛋白質躍升至 92.8 g、花費升至 NT\$177；$\beta=8$ 時更達 119.5 g／NT\$201.5。此「階梯式跳變」反映 MILP 離散決策之本質。圖 \ref{fig:gamma} 顯示分層記憶之多樣性效應：將 $\gamma=0$ 之最優解注入為近期歷史後，$\gamma=0$ 時該餐 4 項全部再現；只要 $\gamma\ge 1$，分層懲罰即將其全數換掉（重複數降為 0），且因替代品同樣便宜，總花費不升反降（NT\$109.5 $\to$ NT\$103），顯示歷史懲罰能在「幾乎不犧牲成本」下顯著提升多樣性。
+圖 \ref{fig:beta} 顯示放寬預算為 NT\$220 後調整 $\beta$（蛋白質權重）之成本-蛋白質權衡。$\beta\le 1$ 時模型以 NT\$109.5 的組合恰好滿足蛋白質下限（45.6 g）；當 $\beta\ge 2$ 後，蛋白質的邊際效益超過較高價高蛋白商品的成本門檻，模型即改變推薦組合，蛋白質躍升至 92.8 g、花費升至 NT\$177；$\beta=8$ 時更達 119.5 g／NT\$201.5。此「階梯式跳變」反映了 MILP 離散決策的本質。圖 \ref{fig:gamma} 顯示分層記憶之多樣性效應：將 $\gamma=0$ 之最優解注入為近期歷史後，$\gamma=0$ 時該餐 4 項全部再現；只要 $\gamma\ge 1$，分層懲罰即促使模型全數更換推薦品項（重複數降為 0），且因替代品同樣便宜，總花費不升反降（NT\$109.5 $\to$ NT\$103），顯示歷史懲罰能在「幾乎不犧牲成本」下顯著提升多樣性。
 \begin{figure}[h]
 \centering
 \begin{minipage}{0.48\textwidth}\centering
@@ -355,7 +361,7 @@ U6 女·增肌 & 1.9\% & 4.0\%  & 53.2\% & NT\$110.9 & NT\$124 \\
 \end{figure}
 
 \subsection{The Price of Diversity}\label{sec:div}
-單純回傳唯一最佳解會使連續查詢得到幾乎相同的餐（\S\ref{par:eps}）。本研究以 Gurobi 解池（solution pool, \texttt{PoolSearchMode=2}）窮舉 $\epsilon$-最佳解集合 $\mathcal{S}_\epsilon=\{s:z(s)\le z^*+\epsilon\}$，以量化「容許多少最佳性可換得多少多樣性」。以一位男·維持·正餐使用者（最便宜之達標餐 NT\$93）為例，圖 \ref{fig:div} 顯示：$\epsilon=0$ 僅 1 種最佳餐；放寬至 $\epsilon=8$（NT\$8）即有 \textbf{12 種} 不同的結構完整餐可選，平均僅多付 NT\$6.7；$\epsilon=16$ 有 \textbf{48 種}、$\epsilon=32$ 更達 \textbf{641 種}，平均成本溢價分別為 NT\$12.8、NT\$20.9。這條曲線即「多樣性的代價」：\textbf{在最佳解附近，多樣性極為廉價}——只需容忍個位數的成本，便可獲得十餘種同樣達標的餐。部署時本研究即以 $\epsilon=8$ 對此集合取樣（以 GRASP-LS 近似 + 分層記憶長期去重），兼顧最佳性與「每次不同」。
+若每次都回傳唯一最佳解，連續查詢容易得到幾乎相同的餐（\S\ref{par:eps}）。本研究以 Gurobi 解池（solution pool, \texttt{PoolSearchMode=2}）窮舉 $\epsilon$-最佳解集合 $\mathcal{S}_\epsilon=\{s:z(s)\le z^*+\epsilon\}$，以量化「犧牲多少最佳性可換得多少多樣性」。以一位男·維持·正餐使用者（最便宜之達標餐 NT\$93）為例，圖 \ref{fig:div} 顯示：$\epsilon=0$ 僅 1 種最佳餐；放寬至 $\epsilon=8$（NT\$8）即有 \textbf{12 種} 結構完整且不同的餐點可選，平均僅多付 NT\$6.7；$\epsilon=16$ 有 \textbf{48 種}、$\epsilon=32$ 更達 \textbf{641 種}，平均成本溢價分別為 NT\$12.8、NT\$20.9。這條曲線即「多樣性的代價」：\textbf{在最佳解附近，取得多樣性的代價相當低}——只需容忍個位數的成本，便可獲得十餘種同樣達標的餐。部署時本研究即以 $\epsilon=8$ 對此集合取樣（以 GRASP-LS 近似 + 分層記憶長期去重），兼顧最佳性與「每次不同」的使用體驗。
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.62\textwidth]{../results/figs/fig_price_of_diversity.png}
@@ -364,31 +370,31 @@ U6 女·增肌 & 1.9\% & 4.0\%  & 53.2\% & NT\$110.9 & NT\$124 \\
 \end{figure}
 
 \subsection{Executable Recommendations}
-以 U1 男·減脂·正餐情境（70 kg，TDEE 2118 kcal，預算 NT\$120，單餐熱量區間 635--953 kcal、蛋白質下限 44.8 g、鈉上限 960 mg）為例。MILP 解為一份結構完整的餐：\textbf{小菠蘿麵包（主餐 NT\$24）＋蜜汁豬肉乾（配菜 NT\$32）＋無加糖濃豆漿（飲料 NT\$28）＋綜合水果軟糖（甜點 NT\$25）}，總價 NT\$110，攝取 693 kcal、45.6 g 蛋白質、667 mg 鈉——恰含一份主餐、一個蛋白質來源、各一份飲料與甜點，熱量、蛋白質、鈉皆達標。相較之下，以「蛋白質／價格比」貪取的 Greedy 取雞腿排+豬耳絲+豆漿（NT\$118、91 g 蛋白質）卻\textbf{缺主餐}且鈉達 2168 mg（超過 $1.5\times$ 硬上限），不可被接受。本模型的價值不在「最便宜」（一份結構餐約與一個便當同價），而在於\textbf{固定預算下穩定產出「結構合理、營養達標、且每次不同」的一餐}——這是單純比價或貪婪法無法同時兼顧的。
+以 U1 男·減脂·正餐情境（70 kg，TDEE 2118 kcal，預算 NT\$120，單餐熱量區間 635--953 kcal、蛋白質下限 44.8 g、鈉上限 960 mg）為例。MILP 解為一份結構完整的餐：\textbf{小菠蘿麵包（主餐 NT\$24）＋蜜汁豬肉乾（配菜 NT\$32）＋無加糖濃豆漿（飲料 NT\$28）＋綜合水果軟糖（甜點 NT\$25）}，總價 NT\$110，攝取 693 kcal、45.6 g 蛋白質、667 mg 鈉——恰含一份主餐、至少一個蛋白質來源，並各含一份飲料與甜點，熱量、蛋白質、鈉皆達標。相較之下，以「蛋白質／價格比」貪取的 Greedy 取雞腿排+豬耳絲+豆漿（NT\$118、91 g 蛋白質）卻\textbf{缺主餐}且鈉達 2168 mg（超過 $1.5\times$ 硬上限），因此不可作為合理推薦。本模型的價值並不在於單純追求「最便宜」（一份結構餐約與一個便當同價），而在於\textbf{固定預算下穩定產出「結構合理、營養達標、且每次不同」的一餐}——這是單純比價或貪婪法無法同時兼顧的。
 
 \subsection{Interactive Web Application}
-為驗證模型之實際可用性，本研究實作一 Flask 互動式網頁應用（\texttt{webapp/app.py}）：使用者於瀏覽器輸入生理資訊與情境，後端即時呼叫 GRASP-LS（預設，含 $\epsilon$-最佳多樣化取樣）或 Gurobi MILP 並回傳推薦清單。網頁以 cookie 維持分層的「口味記憶」佇列，連續使用時可觀察 MLFQ 式分層懲罰使推薦逐次不同；亦可透過 slider 調整 $\alpha,\beta,\gamma$。截圖見圖 \ref{fig:webapp}。
+為驗證模型之實際可用性，本研究實作一 Flask 互動式網頁應用（\texttt{webapp/app.py}）：使用者可於瀏覽器輸入生理資訊與用餐情境，後端即時呼叫 GRASP-LS（預設，含 $\epsilon$-最佳多樣化取樣）或 Gurobi MILP 並回傳推薦清單。網頁以 cookie 維持分層的「口味記憶」佇列，連續使用時可觀察 MLFQ 式分層懲罰如何使推薦逐次產生差異；亦可透過 slider 調整 $\alpha,\beta,\gamma$。截圖見圖 \ref{fig:webapp}。
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.95\textwidth]{../results/figs/webapp_result.png}
-\caption{互動式網頁應用截圖（已展開進階權重面板與「口味記憶」分層面板）：以「男·22歲·175cm·70kg·中活動量·維持·正餐·預算120元」為輸入，GRASP-LS 回傳結構完整的一餐與各項營養達標度；「口味記憶」依新近程度分為「剛吃過／前幾餐／久未推」三層（越深色＝越近期＝越不會再被推薦）。資料源自 488 項全家真實商品（鮮食為真實分級價、其餘為市售行情校正價）。}
+\caption{互動式網頁應用截圖（已展開進階權重面板與「口味記憶」分層面板）：以「男·22歲·175cm·70kg·中活動量·維持·正餐·預算120元」為輸入，GRASP-LS 回傳結構完整的一餐與各項營養達標度；「口味記憶」依新近程度分為「剛吃過／前幾餐／久未推」三層（越深色＝越近期＝越不會再被推薦）。資料源自 488 項全家商品（鮮食為真實分級價、其餘為市售行情校正價）。}
 \label{fig:webapp}
 \end{figure}
 
 \subsection{Discussion and Limitations}
-\paragraph{為何 Greedy 在新模型下 0\% 可行？} Greedy 以「蛋白質／價格比」單一指標排序逐項加入，必然偏好便宜、高蛋白密度的小型品（雞胸、雞腿、豆漿），結果同時觸犯多條硬限制：缺主餐（C11）、品項全為小菜，且高蛋白加工品累積使鈉量突破 $1.5\times$ 硬上限（C8b）。這說明真實的餐食決策是「多重結構限制下的組合最佳化」，任何單一比值排序皆無法勝任——正是本研究 MILP／GRASP-LS 的價值所在。
+\paragraph{為何 Greedy 在新模型下 0\% 可行？} Greedy 依「蛋白質／價格比」此單一指標排序並逐項加入商品，必然偏好便宜、高蛋白密度的小型品（雞胸、雞腿、豆漿），結果同時違反多條硬性限制：缺主餐（C11）、品項全為小菜，且高蛋白加工品累積使鈉量突破 $1.5\times$ 硬上限（C8b）。這說明真實的餐食決策是「多重結構限制下的組合最佳化」，任何單一比值排序皆難以勝任——正是本研究 MILP／GRASP-LS 的價值所在。
 
-\paragraph{為何 GRASP-LS 在「正餐」例題 gap 偶爾較大？} 加入「恰一份主餐 + 餐型結構」(C10--C11) 後，正餐之可行組合較窄；當建構階段隨機選定的主餐不在最優解中、而 LS 的 1-1 swap 鄰域無法一步換達時，便會卡在次優（最差約 40\%）。可透過提高 $K_{\text{restart}}$、加入「換主餐」與 2-2 swap 鄰域，或如部署版退回 MILP 後備來改善。
+\paragraph{為何 GRASP-LS 在「正餐」例題 gap 偶爾較大？} 加入「恰一份主餐 + 餐型結構」(C10--C11) 後，正餐之可行組合較窄；當建構階段隨機選定的主餐不屬於最優解，且 LS 的 1-1 swap 鄰域無法一步到達該解時，便會卡在次優（最差約 40\%）。可透過提高 $K_{\text{restart}}$、加入「換主餐」與 2-2 swap 鄰域，或如部署版退回 MILP 後備來改善。
 
-\paragraph{餐型結構大幅提升推薦真實性.} 早期版本（無 C10--C11、無角色標記）會推出「甜點當主菜」「三件零食湊一餐」「整瓶 1857 ml 豆漿」等營養達標卻不合常理之組合。本研究以官方分類重定餐位角色、過濾家庭份、並加入「恰一主餐／至多一飲料一甜點」之結構硬限制後，推薦皆呈「一份主餐 + 配菜／飲料 + 至多一份甜點」之真實樣態，明顯提升可採用性。
+\paragraph{餐型結構大幅提升推薦真實性.} 早期版本在缺少 C10--C11 與角色標記時，可能推出「甜點當主菜」「三件零食湊一餐」「整瓶 1857 ml 豆漿」等雖營養達標但不符合實際用餐情境的組合。本研究以官方分類重定餐位角色、過濾家庭份、並加入「恰一主餐／至多一飲料一甜點」之結構硬限制後，推薦皆呈「一份主餐 + 配菜／飲料 + 至多一份甜點」的真實樣態，明顯提升可採用性。
 
-\paragraph{資料品質與價格估計.} 488 項商品（581 項過濾家庭份後）之營養來自官方食品履歷，準確度高；價格則 124 項鮮食為促銷頁真實分級價，其餘 457 項因全家無公開單品價 API、且電商目錄為整箱價（78\% 為多入裝），改採依分類之市售行情校正值——此為本研究主要的資料限制。惟敏感度測試顯示，將全部價格上下擾動 10\% 後 U1 正餐之最優解結構（主餐＋配菜＋飲料＋甜點）不變，模型對小幅價格誤差具穩健性。
+\paragraph{資料品質與價格估計.} 488 項商品（581 項過濾家庭份後）之營養來自官方食品履歷，具高度可信度；價格則 124 項鮮食為促銷頁真實分級價，其餘 457 項因全家無公開單品價 API、且電商目錄為整箱價（78\% 為多入裝），改採依分類之市售行情校正值——這是本研究主要的資料限制。不過，敏感度測試顯示，將全部價格上下擾動 10\% 後 U1 正餐之最優解結構（主餐＋配菜＋飲料＋甜點）不變，模型對小幅價格誤差具穩健性。
 
-\paragraph{權重選擇.} 本研究預設 $(\alpha, \beta, \gamma)=(1, 0.5, 2)$，並透過敏感度分析說明各權重對解的影響。實務上，這些權重可由 App 提供 slider 介面，讓使用者自行選擇「重視成本」或「重視蛋白質」；亦可結合個人歷史回饋自動學習。
+\paragraph{權重選擇.} 本研究預設 $(\alpha, \beta, \gamma)=(1, 0.5, 2)$，並透過敏感度分析說明各權重對解的影響。在實務部署上，這些權重可透過 App slider 介面開放使用者調整，讓使用者自行選擇「重視成本」或「重視蛋白質」；亦可結合個人歷史回饋自動學習。
 
 \section{Conclusions}
-本研究將便利商店最佳化餐食推薦形式化為一含優惠組合、個人化營養限制、\textbf{餐型結構限制}與\textbf{分層多樣性懲罰}之混合整數線性規劃，並以即時爬取的 488 項全家真實商品（鮮食為真實分級價、其餘為市售行情校正價）為實證基礎。為兼顧最佳性與實務可用性，本研究自行設計 GRASP-LS 啟發式（含結構感知建構與 $\epsilon$-最佳多樣化取樣），並以 18 個真實 + 30 個隨機、共 48 個情境驗證。主要發現：（1）MILP 於毫秒到秒級求得全域最佳解；（2）GRASP-LS 100\% hard-feasible，平均 optimality gap 為 7.1\%（真實）／4.9\%（隨機）；（3）加入餐型結構與鈉硬上限後，最簡單之 Greedy 法 \textbf{0\% 可行}，凸顯多重結構限制下組合最佳化之必要；（4）敏感度分析顯示 $\beta$ 以「階梯式」控制成本-蛋白質權衡，分層歷史懲罰可在幾乎不漲價下消除重複；（5）以 Gurobi 解池量化「\textbf{多樣性的代價}」：在最佳解附近，容忍 NT\$8 即有 12 種達標餐可選、NT\$32 達 641 種，顯示多樣性極為廉價；（6）實作 Flask 互動式 web 應用，含分層「口味記憶」與權重 slider，展示模型之可部署性。
+本研究將便利商店餐食推薦問題形式化為一個同時包含優惠組合、個人化營養限制、\textbf{餐型結構限制}與\textbf{分層多樣性懲罰}的混合整數線性規劃，並以實際蒐集的 488 項全家商品資料（鮮食為真實分級價、其餘為市售行情校正價）為實證基礎。為兼顧求解品質與實務可用性，本研究自行設計 GRASP-LS 啟發式（含結構感知建構與 $\epsilon$-最佳多樣化取樣），並以 18 個真實例題與 30 個隨機例題進行驗證。主要發現：（1）MILP 於毫秒到秒級求得全域最佳解；（2）GRASP-LS 100\% hard-feasible，平均 optimality gap 為 7.1\%（真實）／4.9\%（隨機）；（3）加入餐型結構與鈉硬上限後，最簡單之 Greedy 法 \textbf{0\% 可行}，凸顯在多重結構限制下進行組合最佳化的必要性；（4）敏感度分析顯示 $\beta$ 以「階梯式」控制成本-蛋白質權衡，分層歷史懲罰可在幾乎不漲價下消除重複；（5）以 Gurobi 解池量化「\textbf{多樣性的代價}」：在最佳解附近，容忍 NT\$8 即有 12 種達標餐可選、NT\$32 達 641 種，顯示在最佳解附近取得多樣性的成本相當低；（6）實作 Flask 互動式 web 應用，含分層「口味記憶」與權重 slider，展示模型具備實際部署潛力。
 
-未來工作可朝以下方向延伸：（a）將模型推廣至「多日連續推薦」與動態庫存／到貨資訊；（b）整合店面實際 OCR 商品標示，自動更新資料表；（c）引入使用者點擊／拒絕回饋的線上學習機制，使 $h_i$ 不只反映過去，更能學習偏好；（d）與外送 App 結合，將推薦範圍擴展至多通路（如 7-11、Hi-Life）以及不同時段限定品。
+未來研究可朝以下方向延伸：（a）將模型推廣至「多日連續推薦」與動態庫存／到貨資訊；（b）整合店面實際 OCR 商品標示，自動更新資料表；（c）引入使用者點擊／拒絕回饋的線上學習機制，使 $h_i$ 不僅反映過去推薦紀錄，也能學習使用者偏好；（d）與外送 App 結合，將推薦範圍擴展至多通路（如 7-11、Hi-Life）以及不同時段限定品。
 
 \end{document}
