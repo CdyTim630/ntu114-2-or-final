@@ -28,6 +28,11 @@
 \setlength{\itemsep}{0pt}
 \setlength{\tabcolsep}{4pt}
 \setlength{\emergencystretch}{3em}
+% allow more floats per page so Table 1 + Fig 2 + Fig 3 can share a page
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.92}
+\renewcommand{\floatpagefraction}{0.8}
 \renewcommand{\baselinestretch}{1.0}
 \captionsetup{font=small,skip=2pt}
 \setlist[itemize]{leftmargin=1.5em, topsep=1pt, itemsep=1pt, parsep=0pt}
@@ -127,7 +132,7 @@ Constraint (C1) prevents a product from being selected both individually and thr
 \paragraph{Interpretation of weights: relative importance of objectives.}The objective-function weights control the relative importance of different objectives: $\alpha$ corresponds to NT-dollar cost, $\beta$ to grams of protein, $\gamma$ and $\gamma_{\text{cat}}$ to item- and category-level repetition penalties, and each $\lambda_*$ to the violation magnitude of a soft constraint. The default $(\alpha,\beta)=(1,0.5)$ means that 1 g of additional protein offsets about NT\$0.5 in objective value. Protein deficiency is penalized strongly ($\lambda_P=6$), making 1 g below target roughly equivalent to NT\$6. Sugar excess is also discouraged ($\lambda_{\text{Sug}}=4$), while sodium is kept soft but capped by C8b; $\lambda_{\text{Sod}}=0.15$ avoids over-salting without destroying feasibility. These weights are empirical but interpretable, and the sensitivity analysis shows how changing them affects cost, protein, and diversity.
 
 \section{Proposed Algorithm: GRASP-LS}\label{sec:alg}
-To reduce reliance on commercial solvers in large-scale scenarios, this study designs a heuristic algorithm named \textbf{GRASP-LS}. The method combines greedy randomized construction (GRC) with neighborhood local search (LS), and uses multi-start search to improve global exploration. The overall procedure is shown in Figure \ref{fig:flow} and Algorithm \ref{alg:grasp}.
+To reduce reliance on commercial solvers in large-scale scenarios, this study designs a heuristic algorithm named \textbf{GRASP-LS}. The method combines greedy randomized construction (GRC) with neighborhood local search (LS), and uses multi-start search to improve global exploration. The overall procedure is shown in Figure~\ref{fig:flow} and \mbox{Algorithm~\ref{alg:grasp}}.
 
 \paragraph{Core ideas.}
 \begin{enumerate}
@@ -304,7 +309,7 @@ U6\_female\_bulk-regular & 791--1186 & 41.8 & 106.60 & 140.65 & 31.9 & Y & Y & N
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.58\textwidth]{../results/figs/fig_feasibility.png}
+\includegraphics[width=0.36\textwidth]{../results/figs/fig_feasibility.png}
 \caption{Hard-feasibility rates across 18 real-world instances.}\label{fig:feas}
 \end{figure}
 
@@ -449,13 +454,13 @@ This study formulates convenience-store meal recommendation as a mixed-integer l
 
 Future work includes a Greedy+Repair benchmark, richer local-search neighborhoods, multi-day recommendation, dynamic inventory information, OCR-based in-store label updates, online learning from clicks and rejections, and integration with delivery apps or other channels such as 7-11 and Hi-Life.
 
-\section*{References}
-{\small
-\setlength{\parskip}{1pt}
-\noindent [1] M. D. Mifflin et al., ``A new predictive equation for resting energy expenditure in healthy individuals,'' \textit{American Journal of Clinical Nutrition}, 1990.\par
-\noindent [2] T. A. Feo and M. G. C. Resende, ``Greedy randomized adaptive search procedures,'' \textit{Journal of Global Optimization}, 1995.\par
-\noindent [3] Gurobi Optimization, LLC, \textit{Gurobi Optimizer Reference Manual}, \url{https://www.gurobi.com/documentation/}.\par
-\noindent [4] FamilyMart, Food Safety Traceability API, \url{foodsafety.family.com.tw/Web_FFD_2022/ws/QueryFsProductListByFilter}, and Fresh Food Promotion Pages, \url{https://nevent.family.com.tw/freshfood/}, accessed 2026.\par
-}
+\begin{thebibliography}{9}
+\small\raggedright
+\setlength{\itemsep}{2pt}
+\bibitem{mifflin} M. D. Mifflin et al., ``A new predictive equation for resting energy expenditure in healthy individuals,'' \textit{American Journal of Clinical Nutrition}, 1990.
+\bibitem{feo1995} T. A. Feo and M. G. C. Resende, ``Greedy randomized adaptive search procedures,'' \textit{Journal of Global Optimization}, 1995.
+\bibitem{gurobi} Gurobi Optimization, LLC, \textit{Gurobi Optimizer Reference Manual}, \url{https://www.gurobi.com/documentation/}.
+\bibitem{familymart} FamilyMart, Food Safety Traceability API, \url{foodsafety.family.com.tw/Web_FFD_2022/ws/QueryFsProductListByFilter}, and Fresh Food Promotion Pages, \url{https://nevent.family.com.tw/freshfood/}, accessed 2026.
+\end{thebibliography}
 
 \end{document}
