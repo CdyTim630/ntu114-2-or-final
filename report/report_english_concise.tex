@@ -24,7 +24,7 @@
 \titleformat*{\section}{\large\bfseries}
 \titleformat*{\subsection}{\normalsize\bfseries}
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{4pt}
+\setlength{\parskip}{3pt}
 \setlength{\itemsep}{0pt}
 \setlength{\tabcolsep}{4pt}
 \setlength{\emergencystretch}{3em}
@@ -271,14 +271,14 @@ This section compares three solution methods: (i) \textbf{Gurobi MILP}, the exac
 Table \ref{tab:real} reports the results for six real-world users across three scenarios. MILP obtained the global optimum for all 18 instances. GRASP-LS also achieved \textbf{100\% hard-feasibility}, with an average optimality gap of \textbf{7.1\%}; 12 out of 18 instances had zero gap. Importantly, all nonzero gaps occurred in the regular-meal scenario. After the exactly-one-staple and meal-structure constraints (C10--C11) were introduced, the feasible region for regular meals became narrower, and the 1-1 swap neighborhood in GRASP-LS occasionally became trapped in a local optimum, with the worst case being U5 female-maintenance-regular at 40.5\%. By contrast, light meals and late-night meals all had zero gap. \textbf{Basic Greedy was 0\% feasible under the new structure and hard sodium cap}: it greedily selects small high-protein products according to the protein-to-price ratio, which typically leads to missing a staple item (violating C11) and exceeding the $1.5\times$ sodium cap (violating C8b). This highlights the difficulty of handling multiple structural constraints with a single sorting criterion (Figure \ref{fig:feas}).
 
 \begin{table}[htbp]
-\centering\normalsize
-\caption{Results for the 18 real-world instances. Gap is $(z_{\text{GRASP}}-z_{\text{MILP}})/|z_{\text{MILP}}|$. MILP returns global optima; GRASP-LS is 100\% hard-feasible with a 7.1\% average gap; Basic Greedy is 0\% feasible.}
+\centering\small
+\caption{Results for the 18 real-world instances. Gap is $(z_{\text{GRASP-LS}}-z_{\text{MILP}})/|z_{\text{MILP}}|$. MILP returns global optima; GRASP-LS is 100\% hard-feasible with a 7.1\% average gap; Basic Greedy is 0\% feasible.}
 \label{tab:real}
-\begin{tabular}{lrrrrrccc}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lrrrrrccc@{}}
 \toprule
  & & & & & & \multicolumn{3}{c}{Feasible (Y/N)} \\
 \cmidrule(lr){7-9}
-Instance & Cal range & $P^{\min}$ & MILP obj & GRASP obj & Gap (\%) & MILP & GRASP & Greedy \\
+Instance & Cal range & $P^{\min}$ & MILP obj & GRASP-LS obj & Gap (\%) & MILP & GRASP-LS & Greedy \\
 \midrule
 U1\_male\_cut-latenight & 106--318 & 11.2 & 27.98 & 27.98 & 0.0 & Y & Y & N \\
 U1\_male\_cut-light & 318--529 & 22.4 & 35.80 & 35.80 & 0.0 & Y & Y & N \\
@@ -299,7 +299,7 @@ U6\_female\_bulk-latenight & 132--395 & 10.4 & 35.75 & 35.75 & 0.0 & Y & Y & N \
 U6\_female\_bulk-light & 395--659 & 20.9 & 57.55 & 57.55 & 0.0 & Y & Y & N \\
 U6\_female\_bulk-regular & 791--1186 & 41.8 & 106.60 & 140.65 & 31.9 & Y & Y & N \\
 \bottomrule
-\end{tabular}
+\end{tabular*}
 \end{table}
 
 Figure \ref{fig:break} uses U1 (male, fat loss, regular meal) as an example to compare the nutritional and cost outcomes of the three methods. MILP and GRASP-LS both produce structurally complete meals that satisfy all relevant targets. Greedy, because it only considers the protein-to-price ratio, misses the staple requirement and exceeds the hard sodium cap, making the solution hard-infeasible.
@@ -313,25 +313,26 @@ Figure \ref{fig:break} uses U1 (male, fat loss, regular meal) as an example to c
 
 \begin{figure}[htbp]
 \centering
-\begin{minipage}{0.46\textwidth}\centering
-\includegraphics[width=\textwidth]{../results/figs/fig_feasibility.png}
+\includegraphics[width=0.58\textwidth]{../results/figs/fig_feasibility.png}
 \caption{Hard-feasibility rates across 18 real-world instances.}\label{fig:feas}
-\end{minipage}\hfill
-\begin{minipage}{0.50\textwidth}\centering
-\includegraphics[width=\textwidth]{../results/figs/fig_runtime.png}
-\caption{Effect of random-instance size on solution time (log scale).}\label{fig:rt}
-\end{minipage}
 \end{figure}
 
+\FloatBarrier
 \subsection{Random Instances and Scalability}
-The results of the 30 random instances are reported in Table \ref{tab:rand} and Figure \ref{fig:gap}.
+The results of the 30 random instances are reported in Table \ref{tab:rand} and Figures \ref{fig:gap}--\ref{fig:rt}.
+MILP found the optimum at every size. GRASP-LS achieved an aligned average optimality gap of \textbf{4.9\%} over the \textbf{28} instances where both MILP and GRASP-LS were feasible, and its hard-feasibility rate was 93\% (28/30). The two cases where GRASP-LS did not find a feasible solution occurred in tight-budget instances with $|I|=30$ and $|I|=50$. Under the structural constraints, construction may occasionally fail to assemble a low-budget meal that contains exactly one staple, at least one protein source, and enough calories. In deployment, these cases are handled by the MILP fallback.
+
+To avoid comparing objectives averaged over different feasibility subsets, Table \ref{tab:rand} reports MILP objective, GRASP-LS feasibility, and aligned GRASP-LS gaps rather than size-level GRASP-LS objective averages. By contrast, after adding the meal-structure constraints (C10--C11) and the hard sodium cap (C8b), Basic Greedy almost completely fails, with \textbf{0\% feasibility} in most sizes. This confirms the need for multi-constraint optimization.
+
+Figure \ref{fig:rt} shows how runtime grows with the number of products. MILP increased from 6 ms at $|I|=30$ to 227 ms at $|I|=300$. GRASP-LS increased from 14 ms to approximately 4.2 seconds. Greedy remained below the millisecond level. Although Gurobi was faster at the tested scale, GRASP-LS provides practical advantages: it avoids commercial-license dependence, can run in environments where a solver is unavailable, naturally generates multiple near-optimal candidates for $\epsilon$-diversity, and has an anytime property. In deployment, Gurobi is therefore treated as the quality benchmark and fallback solver, while GRASP-LS is the self-proposed deployable recommendation algorithm.
+
 \begin{table}[htbp]
 \centering\normalsize
-\caption{Average performance across random-instance sizes, with five seeds per size. MILP objective is averaged over all five runs. Times are in seconds. GRASP-LS gap is the aligned average $(z_{\text{GRASP}}-z_{\text{MILP}})/|z_{\text{MILP}}|\times100\%$ over instances where both methods are feasible.}
+\caption{Average performance across random-instance sizes, with five seeds per size. MILP objective is averaged over all five runs. Times are in seconds. GRASP-LS gap is the aligned average $(z_{\text{GRASP-LS}}-z_{\text{MILP}})/|z_{\text{MILP}}|\times100\%$ over instances where both methods are feasible.}
 \label{tab:rand}
-\begin{tabular}{rrrrrrrr}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}rrrrrrrr@{}}
 \toprule
-$|I|$ & $|K|$ & MILP obj & MILP time & GRASP feas & GRASP gap & GRASP time & Greedy feas \\
+$|I|$ & $|K|$ & MILP obj & MILP time & GRASP-LS feas & GRASP-LS gap & GRASP-LS time & Greedy feas \\
 \midrule
 30 & 8  & 143.5 & 0.006 & 4/5 & 3.1  & 0.014 & 0/5 \\
 50 & 15 & 111.4 & 0.023 & 4/5 & 4.5  & 0.046 & 1/5 \\
@@ -340,17 +341,21 @@ $|I|$ & $|K|$ & MILP obj & MILP time & GRASP feas & GRASP gap & GRASP time & Gre
 200& 60 & 50.3  & 0.133 & 5/5 & 11.6 & 2.044 & 0/5 \\
 300& 90 & 42.1  & 0.227 & 5/5 & 4.5  & 4.156 & 0/5 \\
 \bottomrule
-\end{tabular}
+\end{tabular*}
 \end{table}
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.7\textwidth]{../results/figs/fig_gap_by_size.png}
+\begin{minipage}{0.48\textwidth}\centering
+\includegraphics[width=\textwidth]{../results/figs/fig_gap_by_size.png}
 \caption{Aligned average GRASP-LS optimality gap by random-instance size, computed only over instances where both MILP and GRASP-LS are feasible.}
 \label{fig:gap}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}\centering
+\includegraphics[width=\textwidth]{../results/figs/fig_runtime.png}
+\caption{Effect of random-instance size on solution time (log scale).}\label{fig:rt}
+\end{minipage}
 \end{figure}
-MILP found the optimum at every size. GRASP-LS achieved an aligned average optimality gap of \textbf{4.9\%} over the \textbf{28} instances where both MILP and GRASP-LS were feasible, and its hard-feasibility rate was 93\% (28/30). The two cases where GRASP-LS did not find a feasible solution occurred in tight-budget instances with $|I|=30$ and $|I|=50$. Under the structural constraints, construction may occasionally fail to assemble a low-budget meal that contains exactly one staple, at least one protein source, and enough calories. In deployment, these cases are handled by the MILP fallback. To avoid comparing objectives averaged over different feasibility subsets, Table \ref{tab:rand} reports MILP objective, GRASP-LS feasibility, and aligned GRASP-LS gaps rather than size-level GRASP objective averages. By contrast, after adding the meal-structure constraints (C10--C11) and the hard sodium cap (C8b), Basic Greedy almost completely fails, with \textbf{0\% feasibility} in most sizes. This confirms the need for multi-constraint optimization.
-
-Figure \ref{fig:rt} shows how runtime grows with the number of products. MILP increased from 6 ms at $|I|=30$ to 227 ms at $|I|=300$. GRASP-LS increased from 14 ms to approximately 4.2 seconds. Greedy remained below the millisecond level. Although Gurobi was faster at the tested scale, GRASP-LS provides practical advantages: it avoids commercial-license dependence, can run in environments where a solver is unavailable, naturally generates multiple near-optimal candidates for $\epsilon$-diversity, and has an anytime property. In deployment, Gurobi is therefore treated as the quality benchmark and fallback solver, while GRASP-LS is the self-proposed deployable recommendation algorithm.
+\FloatBarrier
 
 \subsection{Stress-test Scenarios}\label{sec:stress}
 Table \ref{tab:stress} summarizes the $2\times2$ stress-test scenarios, where budget and protein target are crossed and each cell contains 12 instances. MILP was feasible in all 48 instances. GRASP-LS found feasible solutions in \textbf{46/48} instances. Both failures occurred under the tight-budget condition, one with a high protein target and one with a relaxed protein target. In our stress-test design, the high protein target appears to be a stronger driver of the optimality gap than the tight budget alone. Under the muscle-gain goal, the gaps were 7.4\% for tight budgets and 4.1\% for loose budgets; under the maintenance goal, the gaps were only 1.2\% and 1.4\%. Tight-budget scenarios were faster because the feasible region was smaller (about 1.1--1.2 seconds for GRASP-LS, compared with 2.7--2.9 seconds under loose budgets). Within these tested settings, GRASP-LS kept the average gap no greater than 7.4\% and solved the instances within seconds.
