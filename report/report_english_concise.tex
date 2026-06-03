@@ -302,6 +302,12 @@ U6\_female\_bulk-regular & 791--1186 & 41.8 & 106.60 & 140.65 & 31.9 & Y & Y & N
 \end{tabular*}
 \end{table}
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.58\textwidth]{../results/figs/fig_feasibility.png}
+\caption{Hard-feasibility rates across 18 real-world instances.}\label{fig:feas}
+\end{figure}
+
 Figure \ref{fig:break} uses U1 (male, fat loss, regular meal) as an example to compare the nutritional and cost outcomes of the three methods. MILP and GRASP-LS both produce structurally complete meals that satisfy all relevant targets. Greedy, because it only considers the protein-to-price ratio, misses the staple requirement and exceeds the hard sodium cap, making the solution hard-infeasible.
 
 \begin{figure}[htbp]
@@ -309,12 +315,6 @@ Figure \ref{fig:break} uses U1 (male, fat loss, regular meal) as an example to c
 \includegraphics[width=0.95\textwidth]{../results/figs/fig_real_breakdown.png}
 \caption{Calories, protein, sodium, and cost for U1 male-fat-loss-regular. MILP and GRASP-LS satisfy all requirements, while Greedy lacks a staple item and exceeds the hard sodium cap.}
 \label{fig:break}
-\end{figure}
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.58\textwidth]{../results/figs/fig_feasibility.png}
-\caption{Hard-feasibility rates across 18 real-world instances.}\label{fig:feas}
 \end{figure}
 
 \FloatBarrier
@@ -450,7 +450,12 @@ This study formulates convenience-store meal recommendation as a mixed-integer l
 Future work includes a Greedy+Repair benchmark, richer local-search neighborhoods, multi-day recommendation, dynamic inventory information, OCR-based in-store label updates, online learning from clicks and rejections, and integration with delivery apps or other channels such as 7-11 and Hi-Life.
 
 \section*{References}
-\small
-[1] M. D. Mifflin et al., ``A new predictive equation for resting energy expenditure in healthy individuals,'' \textit{American Journal of Clinical Nutrition}, 1990. [2] T. A. Feo and M. G. C. Resende, ``Greedy randomized adaptive search procedures,'' \textit{Journal of Global Optimization}, 1995. [3] Gurobi Optimization, LLC, \textit{Gurobi Optimizer Reference Manual}, \url{https://www.gurobi.com/documentation/}. [4] FamilyMart, Food Safety Traceability API, \url{foodsafety.family.com.tw/Web_FFD_2022/ws/QueryFsProductListByFilter}, and Fresh Food Promotion Pages, \url{https://nevent.family.com.tw/freshfood/}, accessed 2026.
+{\small
+\setlength{\parskip}{1pt}
+\noindent [1] M. D. Mifflin et al., ``A new predictive equation for resting energy expenditure in healthy individuals,'' \textit{American Journal of Clinical Nutrition}, 1990.\par
+\noindent [2] T. A. Feo and M. G. C. Resende, ``Greedy randomized adaptive search procedures,'' \textit{Journal of Global Optimization}, 1995.\par
+\noindent [3] Gurobi Optimization, LLC, \textit{Gurobi Optimizer Reference Manual}, \url{https://www.gurobi.com/documentation/}.\par
+\noindent [4] FamilyMart, Food Safety Traceability API, \url{foodsafety.family.com.tw/Web_FFD_2022/ws/QueryFsProductListByFilter}, and Fresh Food Promotion Pages, \url{https://nevent.family.com.tw/freshfood/}, accessed 2026.\par
+}
 
 \end{document}
