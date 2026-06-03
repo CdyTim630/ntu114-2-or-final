@@ -17,12 +17,14 @@
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \usepackage{enumitem}
+\usepackage{indentfirst}  % indent the first paragraph after every heading too
 \usepackage{xcolor}
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc}
 \usepackage{titlesec}
 \titleformat*{\section}{\large\bfseries}
 \titleformat*{\subsection}{\normalsize\bfseries}
+\setlength{\parindent}{2em}
 \setlength{\parskip}{2pt}
 \setlength{\itemsep}{0pt}
 \renewcommand{\baselinestretch}{1.05}
@@ -140,15 +142,15 @@ x_i = a_i + \sum_{k:\,i\in S_k} y_k \quad\text{(輔助)}.
 
 \begin{figure}[h]
 \centering
-\scalebox{0.88}{%
+\scalebox{1.0}{%
 \begin{tikzpicture}[
-  font=\scriptsize, >=Stealth, node distance=4mm,
+  font=\normalsize, >=Stealth, node distance=6mm,
   box/.style={rectangle, rounded corners, draw=green!45!black, thick,
-              fill=green!8, align=center, inner sep=3pt, text width=72mm, minimum height=7mm},
+              fill=green!8, align=center, inner sep=5pt, text width=98mm, minimum height=10mm},
   term/.style={rectangle, rounded corners=9pt, draw=green!45!black, thick,
-               fill=green!22, align=center, inner sep=3pt, text width=58mm, minimum height=6mm},
+               fill=green!22, align=center, inner sep=5pt, text width=80mm, minimum height=9mm},
   dec/.style={diamond, aspect=2.4, draw=orange!75!black, thick, fill=orange!12,
-              align=center, inner sep=0pt}]
+              align=center, inner sep=1pt}]
   \node[term] (in) {Input: items, meal target, budget $B$};
   \node[box, below=of in] (grc) {\textbf{GRC} --- build RCL by score $\sigma$\\(main first; drink/dessert caps; combos as super-items)};
   \node[box, below=of grc] (ls) {\textbf{Local Search} (first-improvement)\\swap / drop / add / combo-swap};
