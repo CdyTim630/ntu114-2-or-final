@@ -43,33 +43,35 @@ def _to_float(x):
 # ---------------------------------------------------------------------------
 def fig_gap_by_size():
     rows = _load(RES / "random.csv")
-    by_size = defaultdict(lambda: {"MILP": [], "GRASP": [], "Greedy": []})
+    by_inst = defaultdict(dict)
     for r in rows:
-        size = int(r["instance"].split("_")[1].rstrip("p"))
-        by_size[size][r["solver"]].append(_to_float(r["obj"]))
+        by_inst[r["instance"]][r["solver"]] = r
+
+    by_size = defaultdict(list)
+    for inst, solvers in by_inst.items():
+        milp = solvers.get("MILP")
+        grasp = solvers.get("GRASP")
+        if not milp or not grasp:
+            continue
+        if milp["feasible"] != "1" or grasp["feasible"] != "1":
+            continue
+        m_obj = _to_float(milp["obj"])
+        g_obj = _to_float(grasp["obj"])
+        if m_obj in (0, float("inf")) or g_obj == float("inf"):
+            continue
+        size = int(inst.split("_")[1].rstrip("p"))
+        by_size[size].append((g_obj - m_obj) / abs(m_obj) * 100)
 
     sizes = sorted(by_size)
-    gaps_grasp = []
-    gaps_greedy = []
-    for s in sizes:
-        opt = by_size[s]["MILP"]
-        gr  = by_size[s]["GRASP"]
-        gd  = by_size[s]["Greedy"]
-        g = [(g_i - m_i) / abs(m_i) * 100 for m_i, g_i in zip(opt, gr) if m_i not in (0, float("inf"))]
-        d = [(g_i - m_i) / abs(m_i) * 100 for m_i, g_i in zip(opt, gd) if m_i not in (0, float("inf")) and g_i != float("inf")]
-        gaps_grasp.append(mean(g) if g else 0)
-        gaps_greedy.append(mean(d) if d else 0)
+    gaps_grasp = [mean(by_size[s]) if by_size[s] else 0 for s in sizes]
 
     x = range(len(sizes))
-    w = 0.35
     fig, ax = plt.subplots(figsize=(7, 4))
-    ax.bar([i - w/2 for i in x], gaps_grasp, w, label="GRASP-LS", color="#1f77b4")
-    ax.bar([i + w/2 for i in x], gaps_greedy, w, label="Greedy baseline", color="#d62728")
+    ax.bar(list(x), gaps_grasp, 0.5, color="#1f77b4")
     ax.set_xticks(list(x))
     ax.set_xticklabels([f"{s} items" for s in sizes])
-    ax.set_ylabel("Average optimality gap (%)")
-    ax.set_title("Optimality gap by random-instance size")
-    ax.legend()
+    ax.set_ylabel("Aligned average optimality gap (%)")
+    ax.set_title("Aligned GRASP-LS optimality gap by random-instance size")
     ax.grid(axis="y", alpha=0.3)
     plt.tight_layout()
     plt.savefig(FIG / "fig_gap_by_size.png", dpi=180)
